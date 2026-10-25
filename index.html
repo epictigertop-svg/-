@@ -38,17 +38,35 @@
     background: #000;
   }
   #photo.show { display: block; }
+  #player {
+    position: fixed;
+    left: -9999px;
+    top: 0;
+    width: 200px;
+    height: 200px;
+    opacity: 0;
+    pointer-events: none;
+  }
 </style>
 </head>
 <body>
   <div id="text">절대 누르지마</div>
   <img id="photo" src="photo.jpg" alt="">
-  <audio id="song" src="song.mp3" preload="auto" loop></audio>
+  <div id="player"></div>
+  <script src="https://www.youtube.com/iframe_api"></script>
 <script>
   const text = document.getElementById('text');
   const photo = document.getElementById('photo');
-  const song = document.getElementById('song');
+  const VIDEO_ID = 'b0Awv4Uas94';
+  let player = null;
   let step = 0;
+
+  function onYouTubeIframeAPIReady() {
+    player = new YT.Player('player', {
+      videoId: VIDEO_ID,
+      playerVars: { playsinline: 1, loop: 1, playlist: VIDEO_ID, controls: 0 },
+    });
+  }
 
   text.addEventListener('click', () => {
     if (step === 0) {
@@ -58,7 +76,11 @@
     }
     text.style.display = 'none';
     photo.classList.add('show');
-    song.play().catch(() => {});
+    if (player && player.playVideo) {
+      player.unMute();
+      player.setVolume(100);
+      player.playVideo();
+    }
     const el = document.documentElement;
     const fs = el.requestFullscreen || el.webkitRequestFullscreen;
     if (fs) fs.call(el).catch?.(() => {});
