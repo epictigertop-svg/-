@@ -147,14 +147,14 @@
   // ---------- 게임 상태 ----------
   const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
   let snake, dir, queue, food, score, best = 0, stepMs, timer = null, running = false, paused = false;
-  let eatPulse = 0, lastDx = 1;
+  let eatPulse = 0, lastDx = 1, popups = [];
 
   try { best = +localStorage.getItem("faceSnakeBest") || 0; } catch (e) {}
   bestEl.textContent = best;
 
   function reset() {
     snake = [{ x: 6, y: 8 }, { x: 5, y: 8 }, { x: 4, y: 8 }];
-    dir = "right"; queue = []; score = 0; stepMs = 150; lastDx = 1;
+    dir = "right"; queue = []; popups = []; score = 0; stepMs = 150; lastDx = 1;
     scoreEl.textContent = 0;
     placeFood();
   }
@@ -182,6 +182,7 @@
     snake.unshift(head);
     if (willEat) {
       score++; scoreEl.textContent = score; eatPulse = 1;
+      popups.push({ x: head.x * C + C / 2, y: head.y * C, t: Date.now() });
       if (score % 5 === 0) { stepMs = Math.max(70, stepMs - 12); sfx.level(); restartTimer(); }
       else sfx.eat();
       placeFood();
@@ -246,6 +247,28 @@
     if (face.complete) ctx.drawImage(face, -size / 2, -size / 2, size, size);
     ctx.restore();
     eatPulse = Math.max(0, eatPulse - 0.08);
+
+    // 사과 먹을 때 떠오르는 축하 문구
+    const now = Date.now();
+    popups = popups.filter(p => now - p.t < 1400);
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.font = "900 30px system-ui, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif";
+    ctx.lineJoin = "round";
+    for (const p of popups) {
+      const k = (now - p.t) / 1400;
+      const half = ctx.measureText("윤관이 생일축하!").width / 2 + 8;
+      const x = Math.min(Math.max(p.x, half), canvas.width - half);
+      const y = Math.max(p.y - k * 60, 24);
+      const pop = k < 0.15 ? 0.6 + k / 0.15 * 0.5 : 1.1 - Math.min(k - 0.15, 0.1);
+      ctx.save();
+      ctx.globalAlpha = k < 0.7 ? 1 : 1 - (k - 0.7) / 0.3;
+      ctx.translate(x, y); ctx.scale(pop, pop);
+      ctx.lineWidth = 6; ctx.strokeStyle = "#fff";
+      ctx.strokeText("윤관이 생일축하!", 0, 0);
+      ctx.fillStyle = "#e60012";
+      ctx.fillText("윤관이 생일축하!", 0, 0);
+      ctx.restore();
+    }
 
     if (paused) {
       ctx.fillStyle = "rgba(10,14,24,.6)"; ctx.fillRect(0, 0, canvas.width, canvas.height);
