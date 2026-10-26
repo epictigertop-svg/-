@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>BEATCUT · 숏폼 자동 편집</title>
+<meta name="description" content="사진·영상만 올리면 비트에 맞춰 릴스·틱톡 스타일로 자동 편집해 주는 브라우저 편집기">
+<meta name="theme-color" content="#0b0b12">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="top">
+  <a class="logo" href="#" id="homeLink">BEAT<span>CUT</span></a>
+  <span class="tag">릴스 · 틱톡 · 쇼츠 자동 편집</span>
+</header>
+
+<main>
+  <!-- 1. 영상 유형 선택 -->
+  <section id="home" class="home">
+    <h1>사진과 영상만 올리면<br><em>비트에 맞춰</em> 자동으로 편집돼요</h1>
+    <p class="sub">세로형 숏폼(9:16) 전용 · 모든 처리는 내 브라우저에서 이루어져 파일이 서버로 올라가지 않아요.</p>
+    <h2 class="pick">어떤 영상을 만들까요?</h2>
+    <div class="modes">
+      <button class="mode-card" data-mode="photo">
+        <div class="mc-icon">🌟</div>
+        <h3>인물 편집</h3>
+        <p>아이돌·셀럽 사진 여러 장과 짧은 클립을 <b>비트마다 전환</b>하고 효과와 음악을 입혀요.</p>
+        <div class="pills"><span>사진</span><span>짧은 영상</span><span>비트 싱크</span></div>
+      </button>
+      <button class="mode-card" data-mode="highlight">
+        <div class="mc-icon">🎮</div>
+        <h3>하이라이트 편집</h3>
+        <p>게임·운동 영상에서 <b>내가 고른 구간</b>에 슬로우모션, 임팩트, 흔들림 같은 화려한 효과를 넣어요.</p>
+        <div class="pills"><span>게임</span><span>운동</span><span>스포츠</span></div>
+      </button>
+      <div class="mode-card soon">
+        <div class="mc-icon">🍜</div>
+        <h3>먹방 · 브이로그</h3>
+        <p>곧 추가될 예정이에요.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 편집기 -->
+  <section id="editor" class="editor" hidden>
+    <div class="panel">
+      <div class="crumbs">
+        <button id="backBtn" class="link">← 유형 다시 선택</button>
+        <span id="modeLabel" class="mode-label"></span>
+      </div>
+
+      <div class="step">
+        <h2><b>1</b> 소스 올리기</h2>
+        <!-- 인물 편집 -->
+        <div data-show="photo">
+          <label class="drop" id="photoDrop">
+            <input type="file" id="photoInput" accept="image/*,video/*" multiple>
+            <span class="drop-icon">📸</span>
+            <span>사진·짧은 영상을 끌어다 놓거나 눌러서 선택</span>
+            <small>사진을 누르면 얼굴 위치(초점)를 지정할 수 있어요 · 드래그로 순서 변경</small>
+          </label>
+          <div class="tools" id="photoTools" hidden>
+            <span id="photoCount"></span>
+            <span class="spacer"></span>
+            <button id="shuffleBtn" class="ghost">🔀 순서 섞기</button>
+            <button id="clearBtn" class="ghost">비우기</button>
+          </div>
+          <div class="thumbs" id="thumbs"></div>
+        </div>
+        <!-- 하이라이트 편집 -->
+        <div data-show="highlight">
+          <label class="drop" id="hlDrop">
+            <input type="file" id="hlInput" accept="video/*" multiple>
+            <span class="drop-icon">🎮</span>
+            <span>게임·운동 영상을 끌어다 놓거나 눌러서 선택</span>
+            <small>여러 개를 올리면 순서대로 이어 붙여요</small>
+          </label>
+          <div class="src-tabs" id="srcTabs"></div>
+          <div class="marker" id="marker" hidden>
+            <video id="markVideo" controls playsinline preload="auto"></video>
+            <div class="hlbar" id="hlbar"><div class="playhead" id="playhead"></div></div>
+            <div class="mark-btns">
+              <button id="markIn">[ 시작점 <kbd>I</kbd></button>
+              <button id="markOut">끝점 ] <kbd>O</kbd></button>
+              <button id="markQuick" class="hot">⚡ 지금 장면 하이라이트 <kbd>H</kbd></button>
+            </div>
+            <p class="hint" id="markHint">영상을 재생하다가 멋진 장면에서 <b>⚡</b>를 누르거나, 시작점·끝점을 직접 찍어 주세요.</p>
+            <div class="hl-list" id="hlList"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <h2><b>2</b> 음악</h2>
+        <p class="hint">분위기에 맞는 음악을 골라 주세요. 음악을 바꾸면 어울리는 효과가 자동으로 추천돼요.</p>
+        <div class="opts" id="musicGroup"></div>
+        <div class="user-music" id="userMusicBox" hidden>
+          <div class="um-head"><span>🎵 <b id="umName"></b></span><button id="umRemove" class="ghost sm">✕ 해제</button></div>
+          <div class="field-row">
+            <label class="field">BPM<input type="number" id="umBpm" min="50" max="220" step="0.1"></label>
+            <label class="field grow">음악 시작 위치 <span id="umStartLbl"></span><input type="range" id="umStart" min="0" step="0.1" value="0"></label>
+          </div>
+          <small class="hint">BPM은 자동 분석된 값이에요. 컷이 박자와 안 맞으면 직접 고쳐 주세요.</small>
+        </div>
+        <label class="ghost upload-music"><input type="file" id="musicInput" accept="audio/*" hidden>🎵 내 음악 파일 사용하기</label>
+      </div>
+
+      <div class="step">
+        <h2><b>3</b> 장면 전환</h2>
+        <p class="hint" id="trHint"></p>
+        <div class="opts" id="trGroup"></div>
+      </div>
+
+      <div class="step">
+        <h2><b>4</b> 화면 효과</h2>
+        <p class="hint" id="fxHint"></p>
+        <div class="opts" id="fxGroup"></div>
+      </div>
+
+      <div class="step">
+        <h2><b>5</b> 효과음</h2>
+        <p class="hint" id="sfxHint">누르면 소리를 미리 들을 수 있어요.</p>
+        <div class="opts" id="sfxGroup"></div>
+        <label class="field inline" data-show="photo">효과음 넣는 빈도
+          <select id="sfxDensity">
+            <option value="every">모든 컷</option>
+            <option value="bar" selected>한 마디(4박)마다</option>
+            <option value="twobar">두 마디마다</option>
+            <option value="start">시작할 때만</option>
+            <option value="none">넣지 않음</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="step">
+        <h2><b>6</b> 세부 설정</h2>
+        <div class="settings">
+          <label class="field" data-show="photo">컷 속도
+            <select id="cutSpeed">
+              <option value="half">아주 빠르게 (반 박자)</option>
+              <option value="one">빠르게 (1박)</option>
+              <option value="two">보통 (2박)</option>
+              <option value="four">느리게 (4박)</option>
+              <option value="dynamic">다이나믹 (빠름·느림 섞기)</option>
+            </select>
+          </label>
+          <label class="field" data-show="photo">영상 길이
+            <select id="length">
+              <option value="auto">자동 (사진 수만큼, 최소 12초)</option>
+              <option value="10">10초</option>
+              <option value="15">15초</option>
+              <option value="30">30초</option>
+              <option value="60">60초</option>
+            </select>
+          </label>
+          <label class="field" data-show="highlight">구성
+            <select id="structure">
+              <option value="compile">하이라이트만 모으기</option>
+              <option value="full">전체 영상 + 하이라이트 강조</option>
+            </select>
+          </label>
+          <label class="field" data-show="highlight">빌드업 길이 <span id="leadLbl"></span>
+            <input type="range" id="leadIn" min="0" max="4" step="0.5" value="1.5">
+          </label>
+          <label class="field">화면 맞춤
+            <select id="fit">
+              <option value="cover">꽉 채우기 (잘라내기)</option>
+              <option value="blur">전체 보이기 + 블러 배경</option>
+            </select>
+          </label>
+          <label class="field" data-show="highlight">영상 확대 <span id="zoomLbl"></span>
+            <input type="range" id="zoomFit" min="1" max="2" step="0.05" value="1.25">
+          </label>
+          <label class="field">음악 볼륨 <input type="range" id="musicVol" min="0" max="1" step="0.05" value="0.85"></label>
+          <label class="field">효과음 볼륨 <input type="range" id="sfxVol" min="0" max="1" step="0.05" value="0.8"></label>
+          <label class="field" data-show="highlight">원본 소리 <input type="range" id="origVol" min="0" max="1" step="0.05" value="0.5"></label>
+          <label class="field">화질
+            <select id="quality">
+              <option value="720">720p (빠름)</option>
+              <option value="1080">1080p (고화질)</option>
+            </select>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <aside class="preview">
+      <div class="stage" id="stage">
+        <canvas id="out"></canvas>
+        <div class="empty" id="emptyMsg">소스를 올리면<br>여기에 미리보기가 나타나요</div>
+        <button class="big-play" id="bigPlay" aria-label="재생">▶</button>
+      </div>
+      <div class="transport">
+        <button id="playBtn" class="round" aria-label="재생">▶</button>
+        <input type="range" id="seek" min="0" max="1000" value="0">
+        <span id="timeLbl">0:00 / 0:00</span>
+      </div>
+      <div class="status" id="status"></div>
+      <button id="exportBtn" class="cta" disabled>🎬 영상 만들기</button>
+      <div class="export-box" id="exportBox" hidden>
+        <div class="bar"><i id="exportBar"></i></div>
+        <div class="export-row"><span id="exportLbl">녹화 중… 0%</span><button id="cancelExport" class="ghost sm">취소</button></div>
+        <small>실시간으로 녹화돼요. 끝날 때까지 이 탭을 열어 두세요.</small>
+      </div>
+      <div class="result" id="resultBox" hidden>
+        <video id="resultVideo" controls playsinline></video>
+        <a id="dlLink" class="cta" download>⬇ 다운로드</a>
+        <small id="resultNote"></small>
+      </div>
+    </aside>
+  </section>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script src="js/music.js"></script>
+<script src="js/effects.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
