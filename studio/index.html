@@ -125,7 +125,7 @@
 
       <div class="step">
         <h2><b>5</b> 효과음</h2>
-        <p class="hint" id="sfxHint">누르면 소리를 미리 들을 수 있어요.</p>
+        <p class="hint" id="sfxHint">누르면 소리를 미리 들을 수 있어요. 여러 개 고르면 넣을 때마다 하나씩 무작위로 써요.</p>
         <div class="opts" id="sfxGroup"></div>
         <label class="field inline" data-show="photo">효과음 넣는 빈도
           <select id="sfxDensity">
@@ -148,6 +148,13 @@
               <option value="two">보통 (2박)</option>
               <option value="four">느리게 (4박)</option>
               <option value="dynamic">다이나믹 (빠름·느림 섞기)</option>
+            </select>
+          </label>
+          <label class="field" data-show="photo">편집 강도
+            <select id="intensity">
+              <option value="clean">깔끔하게 (효과 적게)</option>
+              <option value="normal" selected>적당하게</option>
+              <option value="wild">화려하게 (매 컷 효과)</option>
             </select>
           </label>
           <label class="field" data-show="photo">영상 길이
@@ -178,12 +185,12 @@
             <input type="range" id="zoomFit" min="1" max="2" step="0.05" value="1.25">
           </label>
           <label class="field">음악 볼륨 <input type="range" id="musicVol" min="0" max="1" step="0.05" value="0.85"></label>
-          <label class="field">효과음 볼륨 <input type="range" id="sfxVol" min="0" max="1" step="0.05" value="0.8"></label>
+          <label class="field">효과음 볼륨 <input type="range" id="sfxVol" min="0" max="1" step="0.05" value="0.6"></label>
           <label class="field" data-show="highlight">원본 소리 <input type="range" id="origVol" min="0" max="1" step="0.05" value="0.5"></label>
           <label class="field">화질
             <select id="quality">
-              <option value="720">720p (빠름)</option>
-              <option value="1080">1080p (고화질)</option>
+              <option value="1080" selected>1080p 고화질 (추천)</option>
+              <option value="720">720p (빠르게 만들기)</option>
             </select>
           </label>
         </div>
@@ -206,7 +213,7 @@
       <div class="export-box" id="exportBox" hidden>
         <div class="bar"><i id="exportBar"></i></div>
         <div class="export-row"><span id="exportLbl">녹화 중… 0%</span><button id="cancelExport" class="ghost sm">취소</button></div>
-        <small>실시간으로 녹화돼요. 끝날 때까지 이 탭을 열어 두세요.</small>
+        <small id="exportNote"></small>
       </div>
       <div class="result" id="resultBox" hidden>
         <video id="resultVideo" controls playsinline></video>
@@ -219,6 +226,7 @@
 
 <div class="toast" id="toast"></div>
 
+<script src="js/vendor/mp4-muxer.js"></script>
 <script src="js/music.js"></script>
 <script src="js/effects.js"></script>
 <script src="js/engine.js"></script>

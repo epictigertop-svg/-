@@ -8,7 +8,9 @@
   function canvas2d(w, h) {
     const c = document.createElement('canvas');
     c.width = w; c.height = h;
-    return c.getContext('2d');
+    const x = c.getContext('2d');
+    x.imageSmoothingQuality = 'high';
+    return x;
   }
 
   // 벨로시티 곡선: 느림 → 빠름 → 느림 (평균 속도 1)
@@ -23,11 +25,20 @@
     dynamic: [2, 1, 1, 2, 0.5, 0.5, 1, 2, 1, 1, 4],
   };
 
-  function pickTransitions(ids, n, seed) {
+  // 편집 강도별: 전환 없이 그냥 컷하는 비율, 비트 강조 효과가 쉬는 비율
+  const INTENSITY = {
+    clean: { plainCut: 0.5, accentRest: 0.6 },
+    normal: { plainCut: 0.25, accentRest: 0.35 },
+    wild: { plainCut: 0, accentRest: 0 },
+  };
+
+  // 고른 전환 중에서 컷마다 하나씩 무작위로
+  function pickTransitions(ids, n, seed, plainCut = 0) {
     const list = ids.length ? ids : ['cut'];
     const out = [];
     let last = null;
     for (let i = 0; i < n; i++) {
+      if (plainCut && hash(seed * 3 + i * 1.93) < plainCut) { out.push('cut'); continue; }
       let id = list[Math.floor(hash(seed + i * 7.31) * list.length)];
       if (list.length > 1 && id === last) id = list[(list.indexOf(id) + 1) % list.length];
       out.push(id); last = id;
@@ -84,7 +95,7 @@
       });
     });
     if (!segs.length) return null;
-    const trIds = pickTransitions([...st.transitions], segs.length, 3.7);
+    const trIds = pickTransitions([...st.transitions], segs.length, 3.7, (INTENSITY[st.intensity] || INTENSITY.normal).plainCut);
     for (let k = 1; k < segs.length; k++) segs[k].tr = trFor(trIds[k], segs[k].dur, segs[k - 1].dur);
 
     // 효과음 위치
@@ -97,7 +108,7 @@
       else if (st.sfxDensity === 'bar') on = k > 0 && beat % 4 === 0;
       else if (st.sfxDensity === 'twobar') on = k > 0 && beat % 8 === 0;
       else if (st.sfxDensity === 'start') on = k === 0;
-      if (on || (k === 0 && st.sfxDensity !== 'none')) ids.forEach((id) => sfx.push({ t: s.start, id }));
+      if ((on || (k === 0 && st.sfxDensity !== 'none')) && ids.length) sfx.push({ t: s.start, id: ids[Math.floor(hash(k * 2.71 + 0.3) * ids.length)] });
     });
     return { mode: 'photo', segs, duration: t, bpm, period, beatOffset: 0, groups: [], sfx: dedupeSfx(sfx) };
   }
@@ -305,6 +316,7 @@
     setSize(W, H) {
       this.W = W; this.H = H;
       this.canvas.width = W; this.canvas.height = H;
+      this.ctx.imageSmoothingQuality = 'high';
       this.bufA = canvas2d(W, H); this.bufB = canvas2d(W, H); this.bufC = canvas2d(W, H);
       this.tmp = canvas2d(W, H); this.tmp2 = canvas2d(W, H);
       this.pix = canvas2d(16, 16);
@@ -426,6 +438,16 @@
       let pulse = Math.exp(-since * 7);
       if (tl.mode === 'highlight') pulse = Math.max(hlPulse, 0.55 * pulse) * amt;
       const f = { t, amt, pulse, beatIdx, since8, hlPulse, period: tl.period, inHL };
+      // 인물 편집: 비트 강조 효과는 고른 것 중 한 박자에 하나만 (가끔은 쉬어 가며)
+      let fx = st.fx;
+      if (tl.mode === 'photo') {
+        const acc = [...st.fx].filter((id) => EF[id] && EF[id].accent);
+        if (acc.length > 0) {
+          fx = new Set([...st.fx].filter((id) => !(EF[id] && EF[id].accent)));
+          const rest = (INTENSITY[st.intensity] || INTENSITY.normal).accentRest;
+          if (beatIdx === 0 || hash(beatIdx * 1.731 + 0.5) >= rest) fx.add(acc[Math.floor(hash(beatIdx * 3.17 + 1.1) * acc.length)]);
+        }
+      }
 
       this.drawSource(this.bufA, loc.cur, t, st, vm, f);
       let out = this.bufA.canvas;
@@ -439,7 +461,7 @@
       }
 
       const cam = { scale: 1, x: 0, y: 0, rot: 0 };
-      st.fx.forEach((id) => { const e = EF[id]; if (e && e.camera) e.camera(f, cam); });
+      fx.forEach((id) => { const e = EF[id]; if (e && e.camera) e.camera(f, cam); });
       c.save();
       c.fillStyle = '#000'; c.fillRect(0, 0, W, H);
       c.translate(W / 2 + cam.x, H / 2 + cam.y);
@@ -448,7 +470,7 @@
       c.drawImage(out, -W / 2, -H / 2);
       c.restore();
 
-      POST_ORDER.forEach((id) => { if (st.fx.has(id)) { const e = EF[id]; if (e && e.post) { c.save(); e.post(c, this, f); c.restore(); } } });
+      POST_ORDER.forEach((id) => { if (fx.has(id)) { const e = EF[id]; if (e && e.post) { c.save(); e.post(c, this, f); c.restore(); } } });
     }
   }
 
@@ -464,7 +486,7 @@
       this.tl = null; this.st = null; this.buffer = null;
       this.t = 0; this.playing = false; this.src = null;
       this.onTick = null; this.onEnd = null;
-      vm.onSeeked = () => { if (!this.playing) this.draw(); };
+      vm.onSeeked = () => { if (!this.playing && !this.exporting) this.draw(); };
       this._loop = this._loop.bind(this);
     }
     setTimeline(tl, st) {
@@ -585,5 +607,137 @@
     });
   }
 
-  window.Engine = { buildPhoto, buildHighlight, locate, VideoManager, Renderer, Player, exportVideo, pickMime };
+  // ───────────────────────── 고화질 내보내기 (프레임 단위 인코딩) ─────────────────────────
+  // 화면 녹화 대신 한 프레임씩 정확히 그려서 H.264 로 인코딩합니다. 기기가 느려도 프레임이 빠지지 않아요.
+  async function pickCodecs(W, H, fps, bitrate) {
+    if (!window.VideoEncoder || !window.AudioEncoder || !window.VideoFrame || !window.Mp4Muxer) return null;
+    let video = null, audio = null;
+    for (const [codec, mux] of [['avc1.640028', 'avc'], ['avc1.4d0028', 'avc'], ['avc1.42e028', 'avc'], ['vp09.00.40.08', 'vp9']]) {
+      const cfg = { codec, width: W, height: H, bitrate, framerate: fps };
+      if (mux === 'avc') cfg.avc = { format: 'avc' };
+      try { if ((await VideoEncoder.isConfigSupported(cfg)).supported) { video = { cfg, mux }; break; } } catch (e) {}
+    }
+    for (const [codec, mux] of [['mp4a.40.2', 'aac'], ['opus', 'opus']]) {
+      const cfg = { codec, sampleRate: 48000, numberOfChannels: 2, bitrate: 192000 };
+      try { if ((await AudioEncoder.isConfigSupported(cfg)).supported) { audio = { cfg, mux }; break; } } catch (e) {}
+    }
+    return video && audio ? { video, audio } : null;
+  }
+
+  // 최종 소리: 음악+효과음 믹스 + (하이라이트) 원본 영상 소리
+  async function finalAudio(player, tl, origVol) {
+    const sr = 48000;
+    const ctx = new OfflineAudioContext(2, Math.ceil(sr * (tl.duration + 0.05)), sr);
+    if (player.buffer) { const s = ctx.createBufferSource(); s.buffer = player.buffer; s.connect(ctx.destination); s.start(0); }
+    if (tl.mode === 'highlight' && origVol > 0) {
+      const g = ctx.createGain();
+      g.gain.value = origVol;
+      g.connect(ctx.destination);
+      for (const seg of tl.segs) {
+        const it = seg.item;
+        if (!('_audio' in it)) {
+          try { it._audio = await player.ac.decodeAudioData(await (await fetch(it.url)).arrayBuffer()); } catch (e) { it._audio = null; }
+        }
+        if (!it._audio) continue;
+        const s = ctx.createBufferSource();
+        s.buffer = it._audio;
+        s.playbackRate.value = seg.rate;
+        const fade = ctx.createGain();
+        fade.gain.setValueAtTime(0, seg.start);
+        fade.gain.linearRampToValueAtTime(1, seg.start + 0.02);
+        fade.gain.setValueAtTime(1, Math.max(seg.start + 0.02, seg.start + seg.dur - 0.03));
+        fade.gain.linearRampToValueAtTime(0, seg.start + seg.dur);
+        s.connect(fade).connect(g);
+        s.start(seg.start, Math.min(seg.srcIn, it._audio.duration));
+        s.stop(seg.start + seg.dur);
+      }
+    }
+    const out = await ctx.startRendering();
+    let peak = 0;
+    for (let c = 0; c < 2; c++) { const d = out.getChannelData(c); for (let i = 0; i < d.length; i++) { const a = Math.abs(d[i]); if (a > peak) peak = a; } }
+    if (peak > 0.95) for (let c = 0; c < 2; c++) { const d = out.getChannelData(c), k = 0.95 / peak; for (let i = 0; i < d.length; i++) d[i] *= k; }
+    return out;
+  }
+
+  function seekEl(el, pos) {
+    return new Promise((res) => {
+      const go = () => {
+        pos = Math.max(0, Math.min(pos, (el.duration || 0) - 0.03));
+        if (Math.abs(el.currentTime - pos) < 0.0005 && el.readyState >= 2) return res();
+        let done = false;
+        const fin = () => { if (done) return; done = true; el.removeEventListener('seeked', fin); clearTimeout(to); res(); };
+        const to = setTimeout(fin, 4000);
+        el.addEventListener('seeked', fin);
+        el.currentTime = pos;
+      };
+      if (el.readyState >= 1) go();
+      else el.addEventListener('loadedmetadata', go, { once: true });
+    });
+  }
+
+  // setTimeout 은 백그라운드 탭에서 느려지므로 MessageChannel 로 양보합니다
+  const yieldNow = () => new Promise((res) => { const ch = new MessageChannel(); ch.port1.onmessage = () => res(); ch.port2.postMessage(0); });
+
+  async function exportHQ(player, { W, H, fps = 30, bitrate, origVol = 0, onProgress, codecs }) {
+    const tl = player.tl, st = player.st, r = player.r, vm = player.vm;
+    let cancelled = false, failed = null;
+    exportHQ.cancel = () => { cancelled = true; };
+    player.pause();
+    player.exporting = true;
+    vm.pauseAll();
+    const prevW = r.W, prevH = r.H;
+    r.setSize(W, H);
+    try {
+      const target = new Mp4Muxer.ArrayBufferTarget();
+      const muxer = new Mp4Muxer.Muxer({
+        target, fastStart: 'in-memory', firstTimestampBehavior: 'offset',
+        video: { codec: codecs.video.mux, width: W, height: H, frameRate: fps },
+        audio: { codec: codecs.audio.mux, numberOfChannels: 2, sampleRate: 48000 },
+      });
+      const venc = new VideoEncoder({ output: (ch, meta) => muxer.addVideoChunk(ch, meta), error: (e) => { failed = e; } });
+      venc.configure(codecs.video.cfg);
+      const aenc = new AudioEncoder({ output: (ch, meta) => muxer.addAudioChunk(ch, meta), error: (e) => { failed = e; } });
+      aenc.configure(codecs.audio.cfg);
+
+      // 소리
+      const ab = await finalAudio(player, tl, origVol);
+      const L = ab.getChannelData(0), R = ab.getChannelData(1), N = 2048;
+      for (let i = 0; i < ab.length; i += N) {
+        const n = Math.min(N, ab.length - i), data = new Float32Array(n * 2);
+        data.set(L.subarray(i, i + n), 0); data.set(R.subarray(i, i + n), n);
+        const ad = new AudioData({ format: 'f32-planar', sampleRate: 48000, numberOfFrames: n, numberOfChannels: 2, timestamp: Math.round((i / 48000) * 1e6), data });
+        aenc.encode(ad); ad.close();
+      }
+
+      // 화면
+      const total = Math.max(1, Math.round(tl.duration * fps));
+      for (let i = 0; i < total; i++) {
+        if (cancelled) throw new Error('cancelled');
+        if (failed) throw failed;
+        const t = i / fps;
+        const loc = locate(tl, t);
+        const segs = [loc.prev, loc.cur].filter((s) => s && s.kind === 'video' && s.el);
+        for (const s of segs) await seekEl(s.el, srcPos(s, t).pos);
+        r.frame(tl, t, st, vm, loc);
+        const frame = new VideoFrame(r.canvas, { timestamp: Math.round(t * 1e6), duration: Math.round(1e6 / fps) });
+        venc.encode(frame, { keyFrame: i % (fps * 2) === 0 });
+        frame.close();
+        while (venc.encodeQueueSize > 6) await yieldNow();
+        if (!segs.length && i % 4 === 0) await yieldNow();
+        if (onProgress) onProgress((i + 1) / total);
+      }
+      await venc.flush();
+      await aenc.flush();
+      if (failed) throw failed;
+      muxer.finalize();
+      venc.close(); aenc.close();
+      return { blob: new Blob([target.buffer], { type: 'video/mp4' }), ext: 'mp4', codec: codecs.video.mux };
+    } finally {
+      player.exporting = false;
+      r.setSize(prevW, prevH);
+      player.seek(0);
+    }
+  }
+
+  window.Engine = { buildPhoto, buildHighlight, locate, VideoManager, Renderer, Player, exportVideo, exportHQ, pickCodecs, pickMime };
 })();

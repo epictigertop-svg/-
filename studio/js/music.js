@@ -478,18 +478,14 @@
 
   // ───────────────────────── 효과음 ─────────────────────────
   // pre: 이벤트 시점보다 얼마나 먼저 시작하는지(초)
+  // 편집 앱 같은 '삑·뾰롱' 소리는 빼고, 영상 에디트에서 실제로 많이 쓰는 묵직하고 부드러운 소리만 둡니다.
   const SFX = [
-    { id: 'whoosh', name: '휙 (Whoosh)', pre: 0.2 },
-    { id: 'shutter', name: '카메라 셔터', pre: 0 },
-    { id: 'impact', name: '임팩트 붐', pre: 0 },
-    { id: 'riser', name: '라이저 (빌드업)', pre: 1.4 },
-    { id: 'drop', name: '베이스 드롭', pre: 0 },
-    { id: 'reverse', name: '리버스 심벌', pre: 0.9 },
-    { id: 'chime', name: '반짝 차임', pre: 0 },
-    { id: 'zap', name: '레이저 잽', pre: 0 },
-    { id: 'glitch', name: '글리치 노이즈', pre: 0 },
-    { id: 'pop', name: '팝', pre: 0 },
-    { id: 'scratch', name: '스크래치', pre: 0.05 },
+    { id: 'whoosh', name: '스윕 (부드러운 휙)', pre: 0.28, desc: '장면이 넘어갈 때 공기 가르는 소리' },
+    { id: 'subdrop', name: '서브 드롭 (쿵)', pre: 0, desc: '낮고 묵직하게 깔리는 저음' },
+    { id: 'shutter', name: '카메라 셔터', pre: 0, desc: '사진이 바뀔 때 찰칵' },
+    { id: 'reverse', name: '리버스 스웰', pre: 1.1, desc: '빨려 들어가듯 차오르는 소리' },
+    { id: 'impact', name: '시네마틱 임팩트', pre: 0, desc: '영화 예고편 같은 큰 한 방' },
+    { id: 'riser', name: '라이저 (빌드업)', pre: 1.6, desc: '긴장감이 점점 올라가는 소리' },
   ];
 
   function playSfx(k, id, at, g) {
@@ -505,18 +501,77 @@
       o.start(t0); o.stop(t0 + dur + 0.1);
       return o;
     };
-    const filt = (type, f, q = 1) => { const b = c.createBiquadFilter(); b.type = type; b.frequency.value = f; b.Q.value = q; return b; };
+    const filt = (type, f, q = 0.7) => { const b = c.createBiquadFilter(); b.type = type; b.frequency.value = f; b.Q.value = q; return b; };
+    const pan = (from, to, dur, t0 = t) => {
+      const p = c.createStereoPanner();
+      p.pan.setValueAtTime(from, t0);
+      p.pan.linearRampToValueAtTime(to, t0 + dur);
+      return p;
+    };
+    const soft = () => { const w = c.createWaveShaper(); w.curve = distCurve(1.5); return w; };
     switch (id) {
       case 'whoosh': {
-        const n = k.noiseSrc(t, 0.45), bp = filt('bandpass', 400, 1.4);
-        bp.frequency.setValueAtTime(350, t);
-        bp.frequency.exponentialRampToValueAtTime(3800, t + 0.22);
-        bp.frequency.exponentialRampToValueAtTime(900, t + 0.42);
+        const d = 0.55;
+        [[-0.9, 0.9, 1], [0.6, -0.6, 0.5]].forEach(([p0, p1, lvl]) => {
+          const n = k.noiseSrc(t, d), bp = filt('bandpass', 500, 0.6), lp = filt('lowpass', 5500);
+          bp.frequency.setValueAtTime(450, t);
+          bp.frequency.exponentialRampToValueAtTime(2200, t + d * 0.5);
+          bp.frequency.exponentialRampToValueAtTime(700, t + d);
+          const e = c.createGain();
+          e.gain.setValueAtTime(0.0001, t);
+          e.gain.exponentialRampToValueAtTime(0.55 * g * lvl, t + d * 0.5);
+          e.gain.exponentialRampToValueAtTime(0.0001, t + d);
+          n.connect(bp).connect(lp).connect(e).connect(pan(p0, p1, d)).connect(out);
+          k.send(e, 0.25);
+        });
+        break;
+      }
+      case 'subdrop': {
+        const o = osc('sine', 72, 30, 1.3);
+        const e = env(0.95, 0.006, 0.08, 1.4);
+        o.connect(soft()).connect(filt('lowpass', 180)).connect(e).connect(out);
+        k.noiseSrc(t, 0.12).connect(filt('lowpass', 220)).connect(env(0.35, 0.002, 0, 0.1)).connect(out);
+        break;
+      }
+      case 'impact': {
+        osc('sine', 58, 34, 1.6).connect(soft()).connect(env(0.9, 0.004, 0.1, 1.8)).connect(out);
+        const body = env(0.5, 0.002, 0.02, 0.35);
+        k.noiseSrc(t, 0.5).connect(filt('lowpass', 900)).connect(body).connect(out);
+        k.send(body, 0.9);
+        const air = env(0.12, 0.001, 0, 0.25);
+        k.noiseSrc(t, 0.3).connect(filt('bandpass', 2500, 0.5)).connect(air).connect(out);
+        k.send(air, 0.8);
+        break;
+      }
+      case 'riser': {
+        const d = 1.6;
+        const n = k.noiseSrc(t, d), bp = filt('bandpass', 400, 1.2);
+        bp.frequency.setValueAtTime(400, t);
+        bp.frequency.exponentialRampToValueAtTime(6000, t + d);
         const e = c.createGain();
-        e.gain.setValueAtTime(0, t);
-        e.gain.linearRampToValueAtTime(0.9 * g, t + 0.2);
-        e.gain.linearRampToValueAtTime(0, t + 0.42);
+        e.gain.setValueAtTime(0.0001, t);
+        e.gain.exponentialRampToValueAtTime(0.35 * g, t + d);
+        e.gain.linearRampToValueAtTime(0, t + d + 0.02);
         n.connect(bp).connect(e).connect(out);
+        k.send(e, 0.35);
+        const lp = filt('lowpass', 400, 2);
+        lp.frequency.setValueAtTime(400, t);
+        lp.frequency.exponentialRampToValueAtTime(4500, t + d);
+        const e2 = c.createGain();
+        e2.gain.setValueAtTime(0.0001, t);
+        e2.gain.exponentialRampToValueAtTime(0.08 * g, t + d);
+        e2.gain.linearRampToValueAtTime(0, t + d + 0.02);
+        lp.connect(e2).connect(out);
+        k.send(e2, 0.4);
+        [-12, 0, 9].forEach((det) => { const o = osc('sawtooth', 220, 880, d); o.detune.value = det; o.connect(lp); });
+        break;
+      }
+      case 'reverse': {
+        // 실제로는 '잔향이 긴 한 방'을 만들고, sfxBuffer 에서 뒤집어 씁니다.
+        const hit = env(0.7, 0.002, 0.03, 0.4, 0);
+        k.noiseSrc(0, 0.5).connect(filt('lowpass', 3500)).connect(hit).connect(out);
+        k.send(hit, 1.4);
+        osc('sine', 110, 80, 0.4, 0).connect(env(0.3, 0.002, 0.05, 0.4, 0)).connect(out);
         break;
       }
       case 'shutter': {
@@ -524,84 +579,7 @@
           const n = k.noiseSrc(t + d, 0.04);
           n.connect(filt('highpass', 2200)).connect(env(i ? 0.35 : 0.6, 0.001, 0.005, 0.03, t + d)).connect(out);
         });
-        osc('square', 1800, 0, 0.01).connect(env(0.08, 0.001, 0, 0.01)).connect(out);
-        break;
-      }
-      case 'impact': {
-        const ws = c.createWaveShaper(); ws.curve = distCurve(6);
-        osc('sine', 110, 30, 0.7).connect(ws).connect(env(0.9, 0.002, 0.05, 1.0)).connect(out);
-        k.noiseSrc(t, 0.4).connect(filt('lowpass', 700)).connect(env(0.6, 0.002, 0, 0.35)).connect(out);
-        const cr = env(0.3, 0.001, 0, 0.12);
-        k.noiseSrc(t, 0.15).connect(filt('highpass', 3000)).connect(cr).connect(out);
-        k.send(cr, 0.4);
-        break;
-      }
-      case 'riser': {
-        const d = 1.4;
-        const n = k.noiseSrc(t, d), hp = filt('bandpass', 300, 2);
-        hp.frequency.setValueAtTime(300, t);
-        hp.frequency.exponentialRampToValueAtTime(7000, t + d);
-        const e = c.createGain();
-        e.gain.setValueAtTime(0.0001, t);
-        e.gain.exponentialRampToValueAtTime(0.5 * g, t + d);
-        e.gain.linearRampToValueAtTime(0, t + d + 0.03);
-        n.connect(hp).connect(e).connect(out);
-        const s = osc('sawtooth', 180, 1400, d), lp = filt('lowpass', 2500);
-        const e2 = c.createGain();
-        e2.gain.setValueAtTime(0.0001, t);
-        e2.gain.exponentialRampToValueAtTime(0.12 * g, t + d);
-        e2.gain.linearRampToValueAtTime(0, t + d + 0.03);
-        s.connect(lp).connect(e2).connect(out);
-        break;
-      }
-      case 'drop': {
-        const ws = c.createWaveShaper(); ws.curve = distCurve(4);
-        osc('sine', 140, 32, 0.9).connect(ws).connect(env(0.9, 0.003, 0.2, 0.9)).connect(out);
-        break;
-      }
-      case 'reverse': {
-        const d = 0.9;
-        const n = k.noiseSrc(t, d), hp = filt('highpass', 4500);
-        const e = c.createGain();
-        e.gain.setValueAtTime(0.0001, t);
-        e.gain.exponentialRampToValueAtTime(0.5 * g, t + d);
-        e.gain.linearRampToValueAtTime(0, t + d + 0.02);
-        n.connect(hp).connect(e).connect(out);
-        break;
-      }
-      case 'chime': {
-        [88, 95, 100, 107].forEach((m, i) => {
-          const t0 = t + i * 0.045;
-          const e = env(0.18, 0.002, 0, 1.1, t0);
-          osc('sine', mtof(m), 0, 1.2, t0).connect(e).connect(out);
-          k.send(e, 0.5);
-        });
-        break;
-      }
-      case 'zap': {
-        osc('square', 2400, 110, 0.25).connect(filt('lowpass', 3500)).connect(env(0.25, 0.002, 0.02, 0.25)).connect(out);
-        break;
-      }
-      case 'glitch': {
-        const r = rng(Math.floor(at * 1000));
-        for (let i = 0; i < 7; i++) {
-          const t0 = t + i * 0.032;
-          osc(r() > 0.5 ? 'square' : 'sawtooth', 200 + r() * 2500, 0, 0.025, t0).connect(env(0.16, 0.001, 0.018, 0.008, t0)).connect(out);
-        }
-        k.noiseSrc(t, 0.22).connect(filt('bandpass', 3000, 3)).connect(env(0.3, 0.001, 0.15, 0.05)).connect(out);
-        break;
-      }
-      case 'pop': {
-        osc('sine', 380, 950, 0.06).connect(env(0.5, 0.002, 0.02, 0.09)).connect(out);
-        break;
-      }
-      case 'scratch': {
-        const n = k.noiseSrc(t, 0.35), bp = filt('bandpass', 1200, 4);
-        const lfo = c.createOscillator(), lg = c.createGain();
-        lfo.frequency.value = 11; lg.gain.value = 900;
-        lfo.connect(lg).connect(bp.frequency);
-        lfo.start(t); lfo.stop(t + 0.4);
-        n.connect(bp).connect(env(0.9, 0.005, 0.25, 0.05)).connect(out);
+        k.noiseSrc(t, 0.05).connect(filt('lowpass', 400)).connect(env(0.3, 0.001, 0.01, 0.04)).connect(out);
         break;
       }
     }
@@ -744,9 +722,25 @@
   function sfxBuffer(id) {
     if (!sfxCache.has(id)) {
       const def = SFX.find((s) => s.id === id) || { pre: 0 };
-      const ctx = new OfflineAudioContext(2, Math.ceil(SR * (def.pre + 2.2)), SR);
-      playSfx(new Kit(ctx, ctx.destination, 99), id, def.pre, 1);
-      sfxCache.set(id, ctx.startRendering().then((buf) => ({ buf, pre: def.pre })));
+      if (id === 'reverse') {
+        // 잔향을 뒤집어서 '빨려 들어오는' 소리를 만듭니다
+        const len = Math.ceil(SR * def.pre);
+        const ctx = new OfflineAudioContext(2, len, SR);
+        playSfx(new Kit(ctx, ctx.destination, 99), id, def.pre, 1);
+        sfxCache.set(id, ctx.startRendering().then((buf) => {
+          for (let ch = 0; ch < 2; ch++) {
+            const d = buf.getChannelData(ch);
+            d.reverse();
+            const f = Math.floor(SR * 0.08);
+            for (let i = 0; i < f; i++) d[i] *= i / f; // 앞부분 부드럽게
+          }
+          return { buf, pre: def.pre };
+        }));
+      } else {
+        const ctx = new OfflineAudioContext(2, Math.ceil(SR * (def.pre + 2.6)), SR);
+        playSfx(new Kit(ctx, ctx.destination, 99), id, def.pre, 1);
+        sfxCache.set(id, ctx.startRendering().then((buf) => ({ buf, pre: def.pre })));
+      }
     }
     return sfxCache.get(id);
   }

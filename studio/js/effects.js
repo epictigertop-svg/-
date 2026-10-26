@@ -160,19 +160,19 @@
   // camera(f, cam): 카메라(줌/흔들림) 조정, post(c, R, f): 완성 화면 위에 덧그리기
   // kind 'content' 는 렌더러가 장면을 그릴 때, 'timing' 은 타임라인을 만들 때 쓰입니다.
   const EFFECTS = [
-    { id: 'beatZoom', name: '비트 줌 펀치', icon: '💥', modes: ['photo', 'highlight'], desc: '비트마다 화면이 툭 튀어나와요',
+    { id: 'beatZoom', accent: true, name: '비트 줌 펀치', icon: '💥', modes: ['photo', 'highlight'], desc: '비트마다 화면이 툭 튀어나와요',
       camera(f, cam) { cam.scale += 0.1 * f.pulse; } },
     { id: 'slowmo', name: '슬로우 모션', icon: '🐢', modes: ['highlight'], kind: 'timing', desc: '하이라이트를 0.5배속으로' },
     { id: 'impactFlash', name: '임팩트 플래시', icon: '⚡', modes: ['highlight'], desc: '하이라이트 시작 순간 번쩍',
       post(c, R, f) { white(c, R, 0.9 * Math.pow(f.hlPulse, 3)); } },
-    { id: 'shake', name: '흔들림', icon: '📳', modes: ['photo', 'highlight'], desc: '비트에 맞춰 화면이 흔들려요',
+    { id: 'shake', accent: true, name: '흔들림', icon: '📳', modes: ['photo', 'highlight'], desc: '비트에 맞춰 화면이 흔들려요',
       camera(f, cam) {
         const k = Math.floor(f.t * 30), amp = 22 * f.pulse;
         cam.x += (hash(k) - 0.5) * 2 * amp; cam.y += (hash(k + 1.7) - 0.5) * 2 * amp;
         if (f.pulse > 0.35) cam.rot += (hash(k + 4.1) - 0.5) * 0.03 * f.pulse; cam.scale += 0.05 * f.pulse;
       } },
     { id: 'replay', name: '리플레이', icon: '🔁', modes: ['highlight'], kind: 'timing', desc: '원속도 → 슬로우로 한 번 더' },
-    { id: 'rgb', name: 'RGB 분리', icon: '🌈', modes: ['photo', 'highlight'], desc: '색이 갈라지는 크로마 효과',
+    { id: 'rgb', accent: true, name: 'RGB 분리', icon: '🌈', modes: ['photo', 'highlight'], desc: '색이 갈라지는 크로마 효과',
       post(c, R, f) { R.chroma(c, (3 + 18 * f.pulse) * f.amt); } },
     { id: 'speedLines', name: '집중선', icon: '🎯', modes: ['highlight'], desc: '만화 같은 집중선',
       post(c, R, f) {
@@ -195,7 +195,7 @@
         c.save(); c.globalCompositeOperation = 'screen'; c.globalAlpha = 0.42 * f.amt;
         c.drawImage(R.blurOf(R.canvas), 0, 0, R.W, R.H); c.restore();
       } },
-    { id: 'sparkle', name: '반짝이', icon: '🌟', modes: ['photo', 'highlight'], desc: '비트마다 반짝이 파티클',
+    { id: 'sparkle', accent: true, name: '반짝이', icon: '🌟', modes: ['photo', 'highlight'], desc: '비트마다 반짝이 파티클',
       post(c, R, f) {
         if (f.amt < 0.02) return;
         const life = 1 - f.pulse;
@@ -216,9 +216,9 @@
         }
         c.restore();
       } },
-    { id: 'flashBeat', name: '비트 플래시', icon: '💡', modes: ['photo', 'highlight'], desc: '비트마다 하얗게 번쩍',
+    { id: 'flashBeat', accent: true, name: '비트 플래시', icon: '💡', modes: ['photo', 'highlight'], desc: '비트마다 하얗게 번쩍',
       post(c, R, f) { white(c, R, 0.45 * Math.pow(f.pulse, 3) * f.amt); } },
-    { id: 'burst', name: '줌 버스트', icon: '🎆', modes: ['photo', 'highlight'], desc: '비트에 잔상이 퍼져요',
+    { id: 'burst', accent: true, name: '줌 버스트', icon: '🎆', modes: ['photo', 'highlight'], desc: '비트에 잔상이 퍼져요',
       post(c, R, f) {
         const a = f.pulse * f.amt;
         if (a < 0.08) return;
@@ -232,9 +232,9 @@
         c.globalCompositeOperation = 'overlay'; c.globalAlpha = 0.35 * f.amt; c.drawImage(R.tmp.canvas, 0, 0);
       } },
     { id: 'mono', name: '흑백 포인트', icon: '🖤', modes: ['photo', 'highlight'], kind: 'content', desc: '중간중간 흑백 컷 (하이라이트는 흑백→컬러)' },
-    { id: 'strobe', name: '스트로브', icon: '🚨', modes: ['photo', 'highlight'], desc: '반 박자마다 깜빡임',
+    { id: 'strobe', accent: true, name: '스트로브', icon: '🚨', modes: ['photo', 'highlight'], desc: '반 박자마다 깜빡임',
       post(c, R, f) { white(c, R, 0.5 * Math.exp(-f.since8 * 16) * f.amt); } },
-    { id: 'glitchFx', name: '글리치 노이즈', icon: '👾', modes: ['photo', 'highlight'], desc: '비트에 화면이 찢어져요',
+    { id: 'glitchFx', accent: true, name: '글리치 노이즈', icon: '👾', modes: ['photo', 'highlight'], desc: '비트에 화면이 찢어져요',
       post(c, R, f) {
         if (f.pulse * f.amt < 0.3 || hash(f.beatIdx * 3.3) < 0.35) return;
         R.copy();
@@ -295,26 +295,26 @@
       highlight: ['phonk', 'edm', 'punk', 'hiphop'],
     },
     photo: {
-      kpop: { tr: ['punchIn', 'flash', 'whipPan', 'zoomBlur'], fx: ['beatZoom', 'glow', 'sparkle', 'rgb'], sfx: ['shutter', 'whoosh', 'chime', 'pop'], cut: 'one' },
-      funk: { tr: ['whipPan', 'shakeCut', 'zoomBlur', 'flash'], fx: ['beatZoom', 'rgb', 'neon', 'grain'], sfx: ['scratch', 'whoosh', 'pop', 'shutter'], cut: 'one' },
-      ballad: { tr: ['dreamy', 'fade', 'filmBurn', 'dipBlack'], fx: ['kenBurns', 'glow', 'lightLeak', 'vignette'], sfx: ['chime', 'reverse', 'shutter', 'whoosh'], cut: 'two' },
-      phonk: { tr: ['shakeCut', 'glitch', 'flash', 'zoomBlur'], fx: ['shake', 'rgb', 'mono', 'vhs'], sfx: ['impact', 'glitch', 'whoosh', 'drop'], cut: 'dynamic' },
-      edm: { tr: ['flash', 'zoomBlur', 'spin', 'glitch'], fx: ['beatZoom', 'burst', 'strobe', 'rgb'], sfx: ['whoosh', 'impact', 'riser', 'zap'], cut: 'dynamic' },
-      hiphop: { tr: ['cut', 'shakeCut', 'slideUp', 'glitch'], fx: ['beatZoom', 'vhs', 'grain', 'mono'], sfx: ['scratch', 'impact', 'shutter', 'whoosh'], cut: 'one' },
-      lofi: { tr: ['fade', 'filmBurn', 'pixel', 'dipBlack'], fx: ['kenBurns', 'grain', 'vhs', 'lightLeak'], sfx: ['pop', 'chime', 'shutter', 'reverse'], cut: 'two' },
-      punk: { tr: ['shakeCut', 'glitch', 'whipPan', 'flash'], fx: ['shake', 'grain', 'rgb', 'mono'], sfx: ['impact', 'scratch', 'glitch', 'whoosh'], cut: 'one' },
-      user: { tr: ['punchIn', 'flash', 'whipPan', 'zoomBlur'], fx: ['beatZoom', 'glow', 'rgb', 'sparkle'], sfx: ['whoosh', 'shutter', 'impact', 'chime'], cut: 'one' },
+      kpop: { tr: ['punchIn', 'flash', 'whipPan', 'zoomBlur'], fx: ['beatZoom', 'glow', 'sparkle', 'rgb'], sfx: ['shutter', 'whoosh', 'subdrop', 'reverse'], cut: 'one' },
+      funk: { tr: ['whipPan', 'shakeCut', 'zoomBlur', 'flash'], fx: ['beatZoom', 'rgb', 'neon', 'grain'], sfx: ['whoosh', 'subdrop', 'shutter', 'reverse'], cut: 'one' },
+      ballad: { tr: ['dreamy', 'fade', 'filmBurn', 'dipBlack'], fx: ['kenBurns', 'glow', 'lightLeak', 'vignette'], sfx: ['reverse', 'whoosh', 'shutter', 'impact'], cut: 'two' },
+      phonk: { tr: ['shakeCut', 'glitch', 'flash', 'zoomBlur'], fx: ['shake', 'rgb', 'mono', 'vhs'], sfx: ['subdrop', 'impact', 'riser', 'whoosh'], cut: 'dynamic' },
+      edm: { tr: ['flash', 'zoomBlur', 'spin', 'glitch'], fx: ['beatZoom', 'burst', 'strobe', 'rgb'], sfx: ['riser', 'subdrop', 'whoosh', 'impact'], cut: 'dynamic' },
+      hiphop: { tr: ['cut', 'shakeCut', 'slideUp', 'glitch'], fx: ['beatZoom', 'vhs', 'grain', 'mono'], sfx: ['subdrop', 'whoosh', 'shutter', 'reverse'], cut: 'one' },
+      lofi: { tr: ['fade', 'filmBurn', 'pixel', 'dipBlack'], fx: ['kenBurns', 'grain', 'vhs', 'lightLeak'], sfx: ['reverse', 'whoosh', 'shutter', 'subdrop'], cut: 'two' },
+      punk: { tr: ['shakeCut', 'glitch', 'whipPan', 'flash'], fx: ['shake', 'grain', 'rgb', 'mono'], sfx: ['impact', 'subdrop', 'whoosh', 'riser'], cut: 'one' },
+      user: { tr: ['punchIn', 'flash', 'whipPan', 'zoomBlur'], fx: ['beatZoom', 'glow', 'rgb', 'sparkle'], sfx: ['whoosh', 'subdrop', 'shutter', 'reverse'], cut: 'one' },
     },
     highlight: {
-      phonk: { tr: ['flash', 'glitch', 'shakeCut', 'zoomBlur'], fx: ['slowmo', 'impactFlash', 'shake', 'rgb'], sfx: ['impact', 'riser', 'glitch', 'drop'] },
-      edm: { tr: ['flash', 'zoomBlur', 'spin', 'glitch'], fx: ['slowmo', 'impactFlash', 'burst', 'strobe'], sfx: ['riser', 'impact', 'drop', 'zap'] },
-      punk: { tr: ['shakeCut', 'flash', 'whipPan', 'glitch'], fx: ['impactFlash', 'shake', 'speedLines', 'grain'], sfx: ['impact', 'whoosh', 'scratch', 'riser'] },
-      hiphop: { tr: ['shakeCut', 'cut', 'glitch', 'slideUp'], fx: ['slowmo', 'impactFlash', 'beatZoom', 'vhs'], sfx: ['scratch', 'impact', 'riser', 'whoosh'] },
-      funk: { tr: ['whipPan', 'flash', 'zoomBlur', 'shakeCut'], fx: ['slowmo', 'impactFlash', 'beatZoom', 'neon'], sfx: ['scratch', 'impact', 'whoosh', 'pop'] },
-      kpop: { tr: ['flash', 'punchIn', 'whipPan', 'zoomBlur'], fx: ['slowmo', 'impactFlash', 'beatZoom', 'sparkle'], sfx: ['whoosh', 'impact', 'chime', 'riser'] },
-      ballad: { tr: ['dreamy', 'fade', 'flash', 'filmBurn'], fx: ['slowmo', 'replay', 'glow', 'vignette'], sfx: ['reverse', 'impact', 'chime', 'whoosh'] },
-      lofi: { tr: ['fade', 'pixel', 'filmBurn', 'flash'], fx: ['slowmo', 'replay', 'vhs', 'grain'], sfx: ['reverse', 'pop', 'impact', 'whoosh'] },
-      user: { tr: ['flash', 'zoomBlur', 'glitch', 'shakeCut'], fx: ['slowmo', 'impactFlash', 'shake', 'rgb'], sfx: ['impact', 'riser', 'whoosh', 'drop'] },
+      phonk: { tr: ['flash', 'glitch', 'shakeCut', 'zoomBlur'], fx: ['slowmo', 'impactFlash', 'shake', 'rgb'], sfx: ['subdrop', 'riser', 'impact', 'whoosh'] },
+      edm: { tr: ['flash', 'zoomBlur', 'spin', 'glitch'], fx: ['slowmo', 'impactFlash', 'burst', 'strobe'], sfx: ['riser', 'impact', 'subdrop', 'whoosh'] },
+      punk: { tr: ['shakeCut', 'flash', 'whipPan', 'glitch'], fx: ['impactFlash', 'shake', 'speedLines', 'grain'], sfx: ['impact', 'riser', 'whoosh', 'subdrop'] },
+      hiphop: { tr: ['shakeCut', 'cut', 'glitch', 'slideUp'], fx: ['slowmo', 'impactFlash', 'beatZoom', 'vhs'], sfx: ['subdrop', 'riser', 'whoosh', 'impact'] },
+      funk: { tr: ['whipPan', 'flash', 'zoomBlur', 'shakeCut'], fx: ['slowmo', 'impactFlash', 'beatZoom', 'neon'], sfx: ['subdrop', 'whoosh', 'riser', 'impact'] },
+      kpop: { tr: ['flash', 'punchIn', 'whipPan', 'zoomBlur'], fx: ['slowmo', 'impactFlash', 'beatZoom', 'sparkle'], sfx: ['riser', 'impact', 'whoosh', 'subdrop'] },
+      ballad: { tr: ['dreamy', 'fade', 'flash', 'filmBurn'], fx: ['slowmo', 'replay', 'glow', 'vignette'], sfx: ['reverse', 'impact', 'whoosh', 'subdrop'] },
+      lofi: { tr: ['fade', 'pixel', 'filmBurn', 'flash'], fx: ['slowmo', 'replay', 'vhs', 'grain'], sfx: ['reverse', 'subdrop', 'whoosh', 'impact'] },
+      user: { tr: ['flash', 'zoomBlur', 'glitch', 'shakeCut'], fx: ['slowmo', 'impactFlash', 'shake', 'rgb'], sfx: ['subdrop', 'riser', 'impact', 'whoosh'] },
     },
   };
 

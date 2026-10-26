@@ -5,7 +5,7 @@
   const { TRANSITIONS, EFFECTS, RECOMMEND } = window.FX;
   const $ = (s) => document.querySelector(s);
 
-  const SFX_ICONS = { whoosh: '💨', shutter: '📷', impact: '💥', riser: '📈', drop: '🔊', reverse: '🌊', chime: '🔔', zap: '🔫', glitch: '👾', pop: '🫧', scratch: '💿' };
+  const SFX_ICONS = { whoosh: '💨', subdrop: '🔊', shutter: '📷', reverse: '🌊', impact: '💥', riser: '📈' };
   const MODE_LABEL = { photo: '🌟 인물 편집', highlight: '🎮 하이라이트 편집' };
 
   const state = {
@@ -18,7 +18,7 @@
     transitions: new Set(), fx: new Set(), sfx: new Set(),
     expanded: {},
     cutSpeed: 'one', length: 'auto', sfxDensity: 'bar', fit: 'cover', structure: 'compile', leadIn: 1.5, zoomFit: 1.25,
-    musicVol: 0.85, sfxVol: 0.8, origVol: 0.5, quality: 720,
+    musicVol: 0.85, sfxVol: 0.6, origVol: 0.5, quality: 1080, intensity: 'normal',
     tl: null, buffer: null,
   };
 
@@ -71,8 +71,8 @@
     $('#editor').hidden = false;
     $('#modeLabel').textContent = MODE_LABEL[mode];
     document.querySelectorAll('[data-show]').forEach((el) => { el.hidden = el.dataset.show !== mode; });
-    $('#trHint').textContent = mode === 'photo' ? '사진이 바뀔 때 쓰이는 전환이에요. 여러 개를 고르면 섞어서 써요.' : '하이라이트 클립 사이에 쓰이는 전환이에요.';
-    $('#fxHint').textContent = mode === 'photo' ? '영상 전체에 비트에 맞춰 들어가요.' : '하이라이트 구간에서만 터져요.';
+    $('#trHint').textContent = mode === 'photo' ? '여러 개 고르면 컷마다 그중 하나만 무작위로 써요. (세부 설정의 "편집 강도"로 전환 빈도 조절)' : '하이라이트 클립 사이에 고른 것 중 하나씩 무작위로 써요.';
+    $('#fxHint').textContent = mode === 'photo' ? '줌 펀치·플래시처럼 비트에 터지는 효과는 한 박자에 하나씩만 번갈아 나오고, 글로우·그레인 같은 색감 효과는 계속 깔려요.' : '하이라이트 구간에서만 터져요.';
     window.scrollTo(0, 0);
     renderAllGroups();
     rebuild();
@@ -83,7 +83,7 @@
     const r = recs();
     state.transitions = new Set(r.tr.slice(0, 3));
     state.fx = new Set(r.fx.slice(0, 3));
-    state.sfx = new Set(r.sfx.slice(0, state.mode === 'highlight' ? 2 : 1));
+    state.sfx = new Set(r.sfx.slice(0, state.mode === 'highlight' ? 2 : 0)); // 인물 편집은 효과음 없이 시작
     if (state.mode === 'photo' && r.cut) { state.cutSpeed = r.cut; $('#cutSpeed').value = r.cut; }
     if (notify) toast('🎯 음악에 어울리는 전환·효과·효과음을 추천해서 골라 뒀어요');
   }
@@ -182,10 +182,15 @@
       try {
         if (f.type.startsWith('image/')) {
           const im = await loadImage(url);
-          const max = 1600, s = Math.min(1, max / Math.max(im.naturalWidth, im.naturalHeight));
+          // 1080x1920 화면을 줌 효과(최대 약 1.35배)까지 해도 선명하도록 필요한 만큼만 남기고 줄임
+          const nw = im.naturalWidth, nh = im.naturalHeight;
+          const s = Math.min(1, Math.max((1080 * 1.35) / nw, (1920 * 1.35) / nh), 3200 / Math.max(nw, nh));
           const c = document.createElement('canvas');
-          c.width = Math.round(im.naturalWidth * s); c.height = Math.round(im.naturalHeight * s);
-          c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+          c.width = Math.round(nw * s); c.height = Math.round(nh * s);
+          const cx = c.getContext('2d');
+          cx.imageSmoothingEnabled = true;
+          cx.imageSmoothingQuality = 'high';
+          cx.drawImage(im, 0, 0, c.width, c.height);
           state.items.push({ id: ++uid, kind: 'image', name: f.name, url, canvas: c, w: c.width, h: c.height, focus: { x: 0.5, y: 0.38 } });
         } else {
           const m = await loadVideoMeta(url);
@@ -547,7 +552,7 @@
   // ───────── 세부 설정 ─────────
   const bindSel = (id, key, num) => $('#' + id).addEventListener('change', (e) => { state[key] = num ? Number(e.target.value) : e.target.value; rebuild(); });
   bindSel('cutSpeed', 'cutSpeed'); bindSel('length', 'length'); bindSel('sfxDensity', 'sfxDensity');
-  bindSel('structure', 'structure'); bindSel('fit', 'fit');
+  bindSel('structure', 'structure'); bindSel('fit', 'fit'); bindSel('intensity', 'intensity');
   const bindRange = (id, key, lbl, f) => {
     const el = $('#' + id);
     const show = () => { if (lbl) $('#' + lbl).textContent = f(state[key]); };
@@ -560,12 +565,8 @@
   bindRange('musicVol', 'musicVol');
   bindRange('sfxVol', 'sfxVol');
   bindRange('origVol', 'origVol');
-  $('#quality').addEventListener('change', (e) => {
-    state.quality = Number(e.target.value);
-    const W = state.quality === 1080 ? 1080 : 720;
-    renderer.setSize(W, Math.round((W * 16) / 9));
-    player.draw();
-  });
+  // 미리보기는 가볍게 720p 로, 내보낼 때만 고른 화질로 그립니다
+  $('#quality').addEventListener('change', (e) => { state.quality = Number(e.target.value); });
 
   // ───────── 타임라인 · 오디오 ─────────
   function engineState() {
@@ -573,7 +574,7 @@
     return {
       mode: state.mode, items: state.items, sources: state.sources, bpm: bpm(),
       fx: state.fx, transitions: state.transitions, sfx: state.sfx,
-      cutSpeed: state.cutSpeed, length: state.length, sfxDensity: state.sfxDensity, fit: state.fit,
+      cutSpeed: state.cutSpeed, length: state.length, intensity: state.intensity, sfxDensity: state.sfxDensity, fit: state.fit,
       structure: state.structure, leadIn: state.leadIn, zoomFit: state.zoomFit,
       musicMax: m.kind === 'user' ? m.buffer.duration - m.start : Infinity,
     };
@@ -675,10 +676,20 @@
       setStatus('🎶 음악 준비 중…');
       await audioReady();
       setStatus('');
-      const res = await Engine.exportVideo(player, {
-        fps: 30, bitrate: state.quality === 1080 ? 14e6 : 8e6,
-        onProgress: (p) => { $('#exportBar').style.width = p * 100 + '%'; $('#exportLbl').textContent = `녹화 중… ${Math.round(p * 100)}%`; },
-      });
+      const W = state.quality, H = Math.round((W * 16) / 9), fps = 30;
+      const bitrate = W >= 1080 ? 16e6 : 8e6;
+      const onProgress = (p) => { $('#exportBar').style.width = p * 100 + '%'; $('#exportLbl').textContent = `${hq ? '고화질 렌더링' : '녹화'} 중… ${Math.round(p * 100)}%`; };
+      const codecs = await Engine.pickCodecs(W, H, fps, bitrate);
+      const hq = !!codecs;
+      $('#exportNote').textContent = hq ? '한 프레임씩 고화질로 만들고 있어요. 이 화면을 켜 두면 가장 빨라요.' : '실시간으로 녹화돼요. 끝날 때까지 이 탭을 열어 두세요.';
+      let res;
+      if (hq) {
+        res = await Engine.exportHQ(player, { W, H, fps, bitrate, codecs, origVol: state.mode === 'highlight' ? state.origVol : 0, onProgress });
+      } else {
+        renderer.setSize(W, H);
+        try { res = await Engine.exportVideo(player, { fps, bitrate: bitrate * 1.4, onProgress }); }
+        finally { renderer.setSize(720, 1280); player.draw(); }
+      }
       const url = URL.createObjectURL(res.blob);
       $('#resultVideo').src = url;
       const a = $('#dlLink');
@@ -700,8 +711,8 @@
       player.onEnd = () => setPlaying(false);
     }
   });
-  $('#cancelExport').addEventListener('click', () => Engine.exportVideo.cancel && Engine.exportVideo.cancel());
-  document.addEventListener('visibilitychange', () => { if (document.hidden && exporting) toast('⚠️ 녹화 중에는 이 탭을 열어 두세요. 다른 탭으로 가면 영상이 끊길 수 있어요', 5000); });
+  $('#cancelExport').addEventListener('click', () => { if (Engine.exportHQ.cancel) Engine.exportHQ.cancel(); if (Engine.exportVideo.cancel) Engine.exportVideo.cancel(); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden && exporting) toast('⚠️ 영상을 만드는 동안 이 화면을 켜 두세요. 다른 탭에 있으면 느려지거나 끊길 수 있어요', 5000); });
 
   renderer.frame(null, 0, { fx: new Set() }, vm);
   window.__beatcut = { state, player, rebuild, enterMode, addPhotoFiles, addHlFiles, addHighlight };
