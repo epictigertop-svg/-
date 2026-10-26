@@ -45,33 +45,44 @@
     const items = st.items;
     const bpm = st.bpm, period = 60 / bpm;
     const pat = CUT_PATTERNS[st.cutSpeed] || CUT_PATTERNS.one;
-    const target = st.length === 'auto' ? Infinity : Number(st.length);
     const maxDur = Math.min(st.musicMax || Infinity, 180);
-    const segs = [];
     if (!items.length) return null;
+    // 자동 길이: 사진은 최소 12초, 영상은 원본 길이의 70% 정도로 (박자 단위로 띄엄띄엄 건너뛰며 컷)
+    let target = Number(st.length);
+    if (st.length === 'auto') {
+      const imgs = items.filter((x) => x.kind === 'image').length;
+      const vidDur = items.reduce((a, x) => a + (x.kind === 'video' ? Math.max(0, x.duration - (x.start || 0)) : 0), 0);
+      const bar = period * 4;
+      target = Math.max(imgs ? AUTO_MIN : 6, Math.min(60, vidDur * 0.7));
+      target = Math.ceil(target / bar - 0.15) * bar;
+    }
+    const segs = [];
     let t = 0, i = 0;
-    const cursor = new Map();
-    while (true) {
-      if (st.length === 'auto' && i >= items.length && t >= AUTO_MIN - 0.01) break;
-      if (t >= target - 0.01) break;
+    while (t < target - 0.01) {
       const item = items[i % items.length];
       let dur = pat[i % pat.length] * period;
       if (t + dur > maxDur) break;
       if (t + dur > target) dur = target - t;
-      const seg = { kind: item.kind, item, start: t, dur, rate: 1, idx: i };
-      if (item.kind === 'video') {
-        let srcIn = cursor.has(item.id) ? cursor.get(item.id) : item.start || 0;
-        if (srcIn + dur > item.duration - 0.05) srcIn = Math.max(0, Math.min(item.start || 0, item.duration - dur - 0.05));
-        seg.srcIn = srcIn;
-        seg.srcDur = Math.min(dur, Math.max(0.1, item.duration - srcIn - 0.05));
-        seg.vel = st.fx.has('velocity');
-        seg.rate = seg.srcDur / dur;
-        cursor.set(item.id, srcIn + seg.srcDur);
-      }
-      seg.mono = st.fx.has('mono') && i % 4 === 3;
-      segs.push(seg);
+      segs.push({ kind: item.kind, item, start: t, dur, rate: 1, idx: i, mono: st.fx.has('mono') && i % 4 === 3 });
       t += dur; i++;
     }
+    // 영상 클립: 같은 영상이 여러 번 나오면 원본을 고르게 훑으며 매 컷마다 다른 장면으로 점프
+    items.filter((x) => x.kind === 'video').forEach((item) => {
+      const occ = segs.filter((s) => s.item === item);
+      if (!occ.length) return;
+      const start = item.start || 0, end = item.duration - 0.05;
+      const usable = end - start, needed = occ.reduce((a, s) => a + s.dur, 0);
+      const gap = needed < usable ? (usable - needed) / occ.length : 0;
+      let pos = start;
+      occ.forEach((seg) => {
+        if (pos + seg.dur > end) pos = needed < usable ? Math.max(start, end - seg.dur) : start;
+        seg.srcIn = pos;
+        seg.srcDur = Math.min(seg.dur, Math.max(0.1, end - pos));
+        seg.vel = st.fx.has('velocity');
+        seg.rate = seg.srcDur / seg.dur;
+        pos += seg.srcDur + gap;
+      });
+    });
     if (!segs.length) return null;
     const trIds = pickTransitions([...st.transitions], segs.length, 3.7);
     for (let k = 1; k < segs.length; k++) segs[k].tr = trFor(trIds[k], segs[k].dur, segs[k - 1].dur);

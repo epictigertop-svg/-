@@ -57,7 +57,7 @@
             <input type="file" id="photoInput" accept="image/*,video/*" multiple>
             <span class="drop-icon">📸</span>
             <span>사진·짧은 영상을 끌어다 놓거나 눌러서 선택</span>
-            <small>사진을 누르면 얼굴 위치(초점)를 지정할 수 있어요 · 드래그로 순서 변경</small>
+            <small><b>영상 1개만 올려도</b> 비트마다 자동으로 잘라서 장면 전환을 넣어요<br>사진을 누르면 얼굴 위치(초점) 지정 · 드래그로 순서 변경</small>
           </label>
           <div class="tools" id="photoTools" hidden>
             <span id="photoCount"></span>
@@ -146,7 +146,7 @@
           </label>
           <label class="field" data-show="photo">영상 길이
             <select id="length">
-              <option value="auto">자동 (사진 수만큼, 최소 12초)</option>
+              <option value="auto">자동 (사진 수·영상 길이에 맞춤)</option>
               <option value="10">10초</option>
               <option value="15">15초</option>
               <option value="30">30초</option>
