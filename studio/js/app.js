@@ -18,11 +18,22 @@
     transitions: new Set(), fx: new Set(), sfx: new Set(),
     expanded: {},
     cutSpeed: 'one', length: 'auto', sfxDensity: 'bar', fit: 'cover', structure: 'compile', leadIn: 1.5, zoomFit: 1.25,
-    musicVol: 0.85, sfxVol: 0.6, origVol: 0.5, quality: 1080, intensity: 'normal',
+    musicVol: 0.85, sfxVol: 0.6, origVol: 0.5, quality: 1080, fps: 30, intensity: 'normal',
     tl: null, buffer: null,
   };
 
   const renderer = new Engine.Renderer($('#out'));
+  // 미리보기는 화면의 실제 픽셀 밀도에 맞춰 (최대 1080p) 그려서 폰에서도 또렷하게
+  function previewSize() {
+    const w = $('#stage').clientWidth || 380;
+    const W = Math.round(Math.min(1080, Math.max(540, w * (window.devicePixelRatio || 1))) / 2) * 2;
+    return [W, Math.round((W * 16) / 9 / 2) * 2];
+  }
+  function fitPreview() {
+    if ($('#editor').hidden || exporting) return;
+    const [W, H] = previewSize();
+    if (W !== renderer.W) { renderer.setSize(W, H); player.draw(); }
+  }
   const vm = new Engine.VideoManager();
   const player = new Engine.Player(renderer, vm);
   let uid = 0;
@@ -74,6 +85,7 @@
     $('#trHint').textContent = mode === 'photo' ? '여러 개 고르면 컷마다 그중 하나만 무작위로 써요. (세부 설정의 "편집 강도"로 전환 빈도 조절)' : '하이라이트 클립 사이에 고른 것 중 하나씩 무작위로 써요.';
     $('#fxHint').textContent = mode === 'photo' ? '줌 펀치·플래시처럼 비트에 터지는 효과는 한 박자에 하나씩만 번갈아 나오고, 글로우·그레인 같은 색감 효과는 계속 깔려요.' : '하이라이트 구간에서만 터져요.';
     window.scrollTo(0, 0);
+    fitPreview();
     renderAllGroups();
     rebuild();
     setTimeout(() => Music.warmup(RECOMMEND.music[mode]), 1500);
@@ -173,6 +185,20 @@
     });
   }
 
+  // 원본이 작아서 1080p 화면에 크게 늘려야 하면 흐릿해짐 → 미리 알려줌
+  function upscaleOf(it) {
+    const w = it.srcW || it.w, h = it.srcH || it.h;
+    if (!w || !h) return 1;
+    const fit = state.fit === 'blur' && Math.abs(w / h - 9 / 16) > 0.02;
+    return fit ? Math.min(1080 / w, 1920 / h) * (state.mode === 'highlight' ? state.zoomFit : 1) : Math.max(1080 / w, 1920 / h);
+  }
+  function warnLowRes(list) {
+    const low = list.filter((it) => upscaleOf(it) > 1.7);
+    if (!low.length) return;
+    const landscape = low.some((it) => (it.srcW || it.w) > (it.srcH || it.h));
+    toast(`⚠️ ${low.length}개는 원본 해상도가 낮아서 흐릿할 수 있어요.${landscape ? ' 가로 영상은 세로로 자르면서 크게 확대돼요 → "화면 맞춤: 전체 보이기"를 쓰거나 세로 원본을 쓰면 훨씬 선명해요.' : ' 더 큰 원본(고화질 사진·1080p 이상 영상)을 쓰면 훨씬 선명해요.'}`, 7000);
+  }
+
   async function addPhotoFiles(files) {
     const list = files.filter((f) => /^(image|video)\//.test(f.type));
     if (!list.length) return toast('사진이나 영상 파일을 올려 주세요');
@@ -191,7 +217,7 @@
           cx.imageSmoothingEnabled = true;
           cx.imageSmoothingQuality = 'high';
           cx.drawImage(im, 0, 0, c.width, c.height);
-          state.items.push({ id: ++uid, kind: 'image', name: f.name, url, canvas: c, w: c.width, h: c.height, focus: { x: 0.5, y: 0.38 } });
+          state.items.push({ id: ++uid, kind: 'image', name: f.name, url, canvas: c, w: c.width, h: c.height, srcW: nw, srcH: nh, focus: { x: 0.5, y: 0.38 } });
         } else {
           const m = await loadVideoMeta(url);
           if (!isFinite(m.duration)) throw new Error('길이를 알 수 없는 영상');
@@ -202,6 +228,7 @@
       }
     }
     setStatus('');
+    warnLowRes(state.items.slice(-list.length));
     renderThumbs();
     rebuild();
   }
@@ -218,7 +245,7 @@
       card.className = 'thumb';
       card.draggable = true;
       const media = it.kind === 'image' ? `<img src="${it.url}" alt="">` : `<video src="${it.url}#t=${(it.start || 0) + 0.1}" muted playsinline preload="metadata"></video>`;
-      card.innerHTML = `<div class="tframe">${media}<span class="tnum">${idx + 1}</span>${it.kind === 'video' ? `<span class="tvid">🎬 ${it.duration.toFixed(1)}s</span>` : ''}<i class="focus-dot"></i></div>
+      card.innerHTML = `<div class="tframe">${media}<span class="tnum">${idx + 1}</span>${it.kind === 'video' ? `<span class="tvid">🎬 ${it.duration.toFixed(1)}s</span>` : ''}${upscaleOf(it) > 1.7 ? `<span class="tlow" title="원본 해상도가 낮아 흐릿할 수 있어요">저화질</span>` : ''}<i class="focus-dot"></i></div>
         <div class="tbar"><button data-a="l" title="앞으로">◀</button><button data-a="r" title="뒤로">▶</button><button data-a="x" title="삭제">✕</button></div>
         ${it.kind === 'video' ? `<label class="tstart">시작 <b>${(it.start || 0).toFixed(1)}s</b><input type="range" min="0" max="${Math.max(0, it.duration - 0.5).toFixed(1)}" step="0.1" value="${it.start || 0}"></label>` : ''}`;
       const frame = card.querySelector('.tframe'), dot = card.querySelector('.focus-dot');
@@ -286,6 +313,7 @@
         state.sources.push({ id: ++uid, kind: 'video', name: f.name, url, duration: m.duration, w: m.w, h: m.h, highlights: [], focus: { x: 0.5, y: 0.5 } });
       } catch (e) { toast(`${f.name}: 불러오지 못했어요`); }
     }
+    warnLowRes(state.sources.slice(-list.length));
     if (state.activeSrc >= state.sources.length) state.activeSrc = 0;
     selectSource(state.sources.length - list.length >= 0 ? Math.max(0, state.sources.length - list.length) : 0);
     rebuild();
@@ -567,6 +595,10 @@
   bindRange('origVol', 'origVol');
   // 미리보기는 가볍게 720p 로, 내보낼 때만 고른 화질로 그립니다
   $('#quality').addEventListener('change', (e) => { state.quality = Number(e.target.value); });
+  $('#fps').addEventListener('change', (e) => { state.fps = Number(e.target.value); });
+  $('#sharpen').addEventListener('change', (e) => { renderer.sharpen = Number(e.target.value); player.draw(); });
+  $('#fit').addEventListener('change', () => renderThumbs());
+  window.addEventListener('resize', debounce(fitPreview, 300));
 
   // ───────── 타임라인 · 오디오 ─────────
   function engineState() {
@@ -676,8 +708,8 @@
       setStatus('🎶 음악 준비 중…');
       await audioReady();
       setStatus('');
-      const W = state.quality, H = Math.round((W * 16) / 9), fps = 30;
-      const bitrate = W >= 1080 ? 16e6 : 8e6;
+      const W = state.quality, H = Math.round((W * 16) / 9), fps = state.fps;
+      const bitrate = (W >= 1080 ? 20e6 : 10e6) * (fps > 30 ? 1.5 : 1);
       const onProgress = (p) => { $('#exportBar').style.width = p * 100 + '%'; $('#exportLbl').textContent = `${hq ? '고화질 렌더링' : '녹화'} 중… ${Math.round(p * 100)}%`; };
       const codecs = await Engine.pickCodecs(W, H, fps, bitrate);
       const hq = !!codecs;
@@ -688,7 +720,7 @@
       } else {
         renderer.setSize(W, H);
         try { res = await Engine.exportVideo(player, { fps, bitrate: bitrate * 1.4, onProgress }); }
-        finally { renderer.setSize(720, 1280); player.draw(); }
+        finally { const [pw, ph] = previewSize(); renderer.setSize(pw, ph); player.draw(); }
       }
       const url = URL.createObjectURL(res.blob);
       $('#resultVideo').src = url;

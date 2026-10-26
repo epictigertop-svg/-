@@ -189,11 +189,11 @@
       } },
     { id: 'kenBurns', name: '슬로우 줌', icon: '🎞️', modes: ['photo'], kind: 'content', desc: '사진이 천천히 확대/축소' },
     { id: 'velocity', name: '벨로시티', icon: '🏎️', modes: ['photo'], kind: 'timing', desc: '영상 클립 속도가 빠르게↔느리게' },
-    { id: 'glow', name: '소프트 글로우', icon: '✨', modes: ['photo', 'highlight'], desc: '뽀샤시하게 빛이 번져요',
+    { id: 'glow', name: '블룸 글로우', icon: '✨', modes: ['photo', 'highlight'], desc: '밝은 부분만 은은하게 빛나요 (선명함 유지)',
       post(c, R, f) {
         if (f.amt < 0.02) return;
-        c.save(); c.globalCompositeOperation = 'screen'; c.globalAlpha = 0.42 * f.amt;
-        c.drawImage(R.blurOf(R.canvas), 0, 0, R.W, R.H); c.restore();
+        c.save(); c.globalCompositeOperation = 'screen'; c.globalAlpha = (R.hasFilter ? 0.55 : 0.22) * f.amt;
+        c.drawImage(R.bloomOf(R.canvas), 0, 0, R.W, R.H); c.restore();
       } },
     { id: 'sparkle', accent: true, name: '반짝이', icon: '🌟', modes: ['photo', 'highlight'], desc: '비트마다 반짝이 파티클',
       post(c, R, f) {
@@ -295,7 +295,7 @@
       highlight: ['phonk', 'edm', 'punk', 'hiphop'],
     },
     photo: {
-      kpop: { tr: ['punchIn', 'flash', 'whipPan', 'zoomBlur'], fx: ['beatZoom', 'glow', 'sparkle', 'rgb'], sfx: ['shutter', 'whoosh', 'subdrop', 'reverse'], cut: 'one' },
+      kpop: { tr: ['punchIn', 'flash', 'whipPan', 'zoomBlur'], fx: ['beatZoom', 'colorPop', 'sparkle', 'glow'], sfx: ['shutter', 'whoosh', 'subdrop', 'reverse'], cut: 'one' },
       funk: { tr: ['whipPan', 'shakeCut', 'zoomBlur', 'flash'], fx: ['beatZoom', 'rgb', 'neon', 'grain'], sfx: ['whoosh', 'subdrop', 'shutter', 'reverse'], cut: 'one' },
       ballad: { tr: ['dreamy', 'fade', 'filmBurn', 'dipBlack'], fx: ['kenBurns', 'glow', 'lightLeak', 'vignette'], sfx: ['reverse', 'whoosh', 'shutter', 'impact'], cut: 'two' },
       phonk: { tr: ['shakeCut', 'glitch', 'flash', 'zoomBlur'], fx: ['shake', 'rgb', 'mono', 'vhs'], sfx: ['subdrop', 'impact', 'riser', 'whoosh'], cut: 'dynamic' },
@@ -303,7 +303,7 @@
       hiphop: { tr: ['cut', 'shakeCut', 'slideUp', 'glitch'], fx: ['beatZoom', 'vhs', 'grain', 'mono'], sfx: ['subdrop', 'whoosh', 'shutter', 'reverse'], cut: 'one' },
       lofi: { tr: ['fade', 'filmBurn', 'pixel', 'dipBlack'], fx: ['kenBurns', 'grain', 'vhs', 'lightLeak'], sfx: ['reverse', 'whoosh', 'shutter', 'subdrop'], cut: 'two' },
       punk: { tr: ['shakeCut', 'glitch', 'whipPan', 'flash'], fx: ['shake', 'grain', 'rgb', 'mono'], sfx: ['impact', 'subdrop', 'whoosh', 'riser'], cut: 'one' },
-      user: { tr: ['punchIn', 'flash', 'whipPan', 'zoomBlur'], fx: ['beatZoom', 'glow', 'rgb', 'sparkle'], sfx: ['whoosh', 'subdrop', 'shutter', 'reverse'], cut: 'one' },
+      user: { tr: ['punchIn', 'flash', 'whipPan', 'zoomBlur'], fx: ['beatZoom', 'colorPop', 'sparkle', 'glow'], sfx: ['whoosh', 'subdrop', 'shutter', 'reverse'], cut: 'one' },
     },
     highlight: {
       phonk: { tr: ['flash', 'glitch', 'shakeCut', 'zoomBlur'], fx: ['slowmo', 'impactFlash', 'shake', 'rgb'], sfx: ['subdrop', 'riser', 'impact', 'whoosh'] },

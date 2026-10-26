@@ -303,11 +303,71 @@
     pauseAll() { this.all.forEach((el) => el.paused || el.pause()); }
   }
 
+  // ───────────────────────── 선명도 보정 (WebGL) ─────────────────────────
+  // AMD FidelityFX CAS(Contrast Adaptive Sharpening) 방식: 확대된 흐릿한 경계만 또렷하게, 노이즈·테두리는 과하게 키우지 않음
+  class Sharpener {
+    constructor(canvas) {
+      const gl = canvas.getContext('webgl', { preserveDrawingBuffer: true, alpha: false, antialias: false, premultipliedAlpha: false });
+      this.ok = !!gl;
+      if (!gl) return;
+      this.g = gl;
+      const vs = 'attribute vec2 p;varying vec2 uv;void main(){uv=p*0.5+0.5;gl_Position=vec4(p,0.,1.);}';
+      const fs = `precision highp float;varying vec2 uv;uniform sampler2D t;uniform vec2 px;uniform float k;
+        vec3 at(float x,float y){return texture2D(t,uv+vec2(x,y)*px).rgb;}
+        void main(){
+          vec3 e=at(0.,0.);
+          if(k<=0.){gl_FragColor=vec4(e,1.);return;}
+          vec3 a=at(-1.,-1.),b=at(0.,-1.),c=at(1.,-1.),d=at(-1.,0.),f=at(1.,0.),g=at(-1.,1.),h=at(0.,1.),i=at(1.,1.);
+          vec3 mn=min(min(min(d,e),min(f,b)),h);vec3 mn2=min(mn,min(min(a,c),min(g,i)));mn+=mn2;
+          vec3 mx=max(max(max(d,e),max(f,b)),h);vec3 mx2=max(mx,max(max(a,c),max(g,i)));mx+=mx2;
+          vec3 amp=sqrt(clamp(min(mn,2.-mx)/max(mx,1e-4),0.,1.));
+          vec3 w=amp*(-1./mix(8.,4.6,k));
+          vec3 col=(b*w+d*w+f*w+h*w+e)/(1.+4.*w);
+          gl_FragColor=vec4(clamp(col,0.,1.),1.);
+        }`;
+      const sh = (type, src) => { const o = gl.createShader(type); gl.shaderSource(o, src); gl.compileShader(o); return o; };
+      const pr = gl.createProgram();
+      gl.attachShader(pr, sh(gl.VERTEX_SHADER, vs));
+      gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, fs));
+      gl.linkProgram(pr);
+      if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) { this.ok = false; return; }
+      gl.useProgram(pr);
+      const buf = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+      const loc = gl.getAttribLocation(pr, 'p');
+      gl.enableVertexAttribArray(loc);
+      gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+      const tex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+      this.uPx = gl.getUniformLocation(pr, 'px');
+      this.uK = gl.getUniformLocation(pr, 'k');
+    }
+    draw(src, k) {
+      const gl = this.g;
+      gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
+      gl.uniform2f(this.uPx, 1 / src.width, 1 / src.height);
+      gl.uniform1f(this.uK, k);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
+  }
+
   // ───────────────────────── 렌더러 ─────────────────────────
   class Renderer {
-    constructor(canvas) {
-      this.canvas = canvas;
-      this.ctx = canvas.getContext('2d');
+    constructor(view) {
+      // 효과는 화면 밖 2D 캔버스에 그리고, 마지막에 GPU 선명도 보정을 거쳐 화면(view)에 냅니다
+      this.view = view;
+      this.canvas = document.createElement('canvas');
+      this.ctx = this.canvas.getContext('2d');
+      this.sharpen = 0.6;
+      this.gl = new Sharpener(view);
+      if (!this.gl.ok) { this.gl = null; this.viewCtx = view.getContext('2d'); }
       const probe = canvas2d(1, 1);
       probe.filter = 'blur(1px)';
       this.hasFilter = probe.filter === 'blur(1px)';
@@ -316,6 +376,7 @@
     setSize(W, H) {
       this.W = W; this.H = H;
       this.canvas.width = W; this.canvas.height = H;
+      this.view.width = W; this.view.height = H;
       this.ctx.imageSmoothingQuality = 'high';
       this.bufA = canvas2d(W, H); this.bufB = canvas2d(W, H); this.bufC = canvas2d(W, H);
       this.tmp = canvas2d(W, H); this.tmp2 = canvas2d(W, H);
@@ -337,6 +398,21 @@
       const s = canvas2d(4, 4);
       s.fillStyle = 'rgba(0,0,0,0.5)'; s.fillRect(0, 0, 4, 2);
       this.scanPattern = this.ctx.createPattern(s.canvas, 'repeat');
+    }
+    // 화면에 내보내기 (선명도 보정 포함)
+    present() {
+      if (this.gl) this.gl.draw(this.canvas, this.sharpen);
+      else { this.viewCtx.drawImage(this.canvas, 0, 0); }
+    }
+    // 하이라이트(밝은 부분)만 번지게 하는 블룸용
+    bloomOf(img) {
+      const s = this.small;
+      s.save();
+      if (this.hasFilter) s.filter = 'blur(2px) brightness(0.75) contrast(2.4)';
+      s.globalCompositeOperation = 'copy';
+      s.drawImage(img, 0, 0, s.canvas.width, s.canvas.height);
+      s.restore();
+      return s.canvas;
     }
     copy() { this.tmp.globalCompositeOperation = 'copy'; this.tmp.drawImage(this.canvas, 0, 0); this.tmp.globalCompositeOperation = 'source-over'; }
     blurOf(img) {
@@ -411,7 +487,7 @@
 
     frame(tl, t, st, vm, loc) {
       const W = this.W, H = this.H, c = this.ctx;
-      if (!tl) { c.fillStyle = '#0b0b10'; c.fillRect(0, 0, W, H); return; }
+      if (!tl) { c.fillStyle = '#0b0b10'; c.fillRect(0, 0, W, H); this.present(); return; }
       loc = loc || locate(tl, t);
 
       // 하이라이트 강도
@@ -471,6 +547,7 @@
       c.restore();
 
       POST_ORDER.forEach((id) => { if (fx.has(id)) { const e = EF[id]; if (e && e.post) { c.save(); e.post(c, this, f); c.restore(); } } });
+      this.present();
     }
   }
 
@@ -577,9 +654,9 @@
   function exportVideo(player, { fps = 30, bitrate = 10e6, onProgress } = {}) {
     return new Promise((resolve, reject) => {
       const mime = pickMime();
-      if (mime === null || !player.r.canvas.captureStream) return reject(new Error('이 브라우저는 영상 녹화를 지원하지 않아요. 최신 크롬/엣지/사파리를 이용해 주세요.'));
+      if (mime === null || !player.r.view.captureStream) return reject(new Error('이 브라우저는 영상 녹화를 지원하지 않아요. 최신 크롬/엣지/사파리를 이용해 주세요.'));
       player.pause();
-      const stream = player.r.canvas.captureStream(fps);
+      const stream = player.r.view.captureStream(fps);
       if (player.recDest) player.recDest.stream.getAudioTracks().forEach((tr) => stream.addTrack(tr));
       let rec;
       try { rec = new MediaRecorder(stream, { mimeType: mime || undefined, videoBitsPerSecond: bitrate, audioBitsPerSecond: 192000 }); }
@@ -612,7 +689,7 @@
   async function pickCodecs(W, H, fps, bitrate) {
     if (!window.VideoEncoder || !window.AudioEncoder || !window.VideoFrame || !window.Mp4Muxer) return null;
     let video = null, audio = null;
-    for (const [codec, mux] of [['avc1.640028', 'avc'], ['avc1.4d0028', 'avc'], ['avc1.42e028', 'avc'], ['vp09.00.40.08', 'vp9']]) {
+    for (const [codec, mux] of [['avc1.64002a', 'avc'], ['avc1.4d002a', 'avc'], ['avc1.42e02a', 'avc'], ['avc1.640028', 'avc'], ['vp09.00.41.08', 'vp9']]) {
       const cfg = { codec, width: W, height: H, bitrate, framerate: fps };
       if (mux === 'avc') cfg.avc = { format: 'avc' };
       try { if ((await VideoEncoder.isConfigSupported(cfg)).supported) { video = { cfg, mux }; break; } } catch (e) {}
@@ -719,7 +796,7 @@
         const segs = [loc.prev, loc.cur].filter((s) => s && s.kind === 'video' && s.el);
         for (const s of segs) await seekEl(s.el, srcPos(s, t).pos);
         r.frame(tl, t, st, vm, loc);
-        const frame = new VideoFrame(r.canvas, { timestamp: Math.round(t * 1e6), duration: Math.round(1e6 / fps) });
+        const frame = new VideoFrame(r.view, { timestamp: Math.round(t * 1e6), duration: Math.round(1e6 / fps) });
         venc.encode(frame, { keyFrame: i % (fps * 2) === 0 });
         frame.close();
         while (venc.encodeQueueSize > 6) await yieldNow();
