@@ -666,6 +666,34 @@
     return { bpm: Math.round(60 / period * 10) / 10, offset: bestOff };
   }
 
+  // 노래에서 가장 신나는 4마디(후렴 후보) 시작점 찾기
+  function findHook(buffer, bpm, offset) {
+    const sr = buffer.sampleRate, period = 60 / bpm;
+    const ch = buffer.getChannelData(0);
+    const beats = Math.floor((buffer.duration - offset) / period);
+    if (beats < 24) return 0;
+    const rms = new Float32Array(beats);
+    for (let b = 0; b < beats; b++) {
+      const i0 = Math.floor((offset + b * period) * sr), i1 = Math.min(ch.length, Math.floor(i0 + period * sr));
+      let e = 0, n = 0;
+      for (let i = i0; i < i1; i += 4) { e += ch[i] * ch[i]; n++; }
+      rms[b] = Math.sqrt(e / Math.max(1, n));
+    }
+    const win = 16; // 4마디
+    let best = 0, bestScore = -1;
+    const minBeat = Math.min(beats - win, Math.floor(12 / period)); // 너무 앞쪽(인트로)은 피함
+    for (let b = Math.max(0, minBeat); b + win <= beats; b += 4) {
+      let s = 0;
+      for (let k = 0; k < win; k++) s += rms[b + k];
+      // 직전보다 확 커지는 지점(후렴 진입)에 가산점
+      let pre = 0;
+      for (let k = 1; k <= 8 && b - k >= 0; k++) pre += rms[b - k];
+      const score = s / win + 0.3 * Math.max(0, s / win - pre / 8);
+      if (score > bestScore) { bestScore = score; best = b; }
+    }
+    return Math.max(0, offset + best * period);
+  }
+
   // ───────────────────────── 믹스 렌더링 ─────────────────────────
   const SR = 44100;
   const LOOP_BARS = 4;
@@ -797,5 +825,5 @@
     genreIds.reduce((p, id) => p.then(() => { const g = GENRES.find((x) => x.id === id); return g && genreBase(g, g.bpm); }), Promise.resolve()).catch(() => {});
   }
 
-  window.Music = { GENRES, SFX, renderMix, detectBeat, previewSfx, warmup };
+  window.Music = { GENRES, SFX, renderMix, detectBeat, findHook, previewSfx, warmup };
 })();

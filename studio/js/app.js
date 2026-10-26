@@ -126,6 +126,7 @@
         if (state.music.kind === 'genre' && state.music.genreId === id) return;
         state.music = { kind: 'genre', genreId: id };
         applyRecommend();
+        renderSongs();
         renderUserMusic();
         renderAllGroups();
         rebuild();
@@ -406,27 +407,109 @@
     if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); togglePlay(); }
   });
 
-  // ───────── 내 음악 ─────────
-  $('#musicInput').addEventListener('change', async (e) => {
-    const f = e.target.files[0];
-    e.target.value = '';
-    if (!f) return;
-    setStatus('🎵 음악 분석 중…');
-    try {
-      const buf = await player.ac.decodeAudioData(await f.arrayBuffer());
-      const beat = Music.detectBeat(buf);
-      state.music = { kind: 'user', name: f.name, buffer: buf, bpm: beat.bpm, offset: beat.offset, start: 0, userStart: 0 };
-      snapStart();
-      applyRecommend(false);
-      toast(`🎵 BPM ${beat.bpm} 으로 분석했어요. 컷이 박자에 맞춰져요`);
-      renderUserMusic();
-      renderAllGroups();
-      rebuild();
-    } catch (err) {
-      toast('이 음악 파일은 읽을 수 없어요 (mp3, m4a, wav 권장)');
+  // ───────── 내 노래 (브라우저에 저장) ─────────
+  const songDB = (() => {
+    let dbp = null;
+    const open = () => dbp || (dbp = new Promise((res, rej) => {
+      const r = indexedDB.open('beatcut', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('songs', { keyPath: 'id' });
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => rej(r.error);
+    }));
+    const tx = async (mode, fn) => {
+      const db = await open();
+      return new Promise((res, rej) => {
+        const t = db.transaction('songs', mode), st = t.objectStore('songs');
+        const out = fn(st);
+        t.oncomplete = () => res(out && out.result);
+        t.onerror = () => rej(t.error);
+      });
+    };
+    return {
+      all: () => tx('readonly', (st) => st.getAll()).catch(() => []),
+      put: (song) => tx('readwrite', (st) => st.put(song)).catch(() => {}),
+      del: (id) => tx('readwrite', (st) => st.delete(id)).catch(() => {}),
+    };
+  })();
+  let songs = [];
+  const decoded = new Map();
+  songDB.all().then((list) => { songs = (list || []).sort((a, b) => b.added - a.added); renderSongs(); });
+
+  setupDrop($('#songDrop'), $('#musicInput'), addSongs);
+
+  async function decodeSong(song) {
+    if (!decoded.has(song.id)) decoded.set(song.id, player.ac.decodeAudioData(await song.blob.arrayBuffer()));
+    return decoded.get(song.id);
+  }
+
+  async function addSongs(files) {
+    const list = files.filter((f) => /^(audio|video)\//.test(f.type) || /\.(mp3|m4a|wav|aac|ogg|flac|mp4|mov|webm)$/i.test(f.name));
+    if (!list.length) return toast('노래 파일(mp3, m4a, wav)이나 영상 파일을 넣어 주세요');
+    let last = null;
+    for (const f of list) {
+      setStatus(`🎵 "${f.name}" 분석 중…`);
+      try {
+        const id = 's' + Date.now() + Math.random().toString(36).slice(2, 6);
+        const song = { id, name: f.name.replace(/\.[^.]+$/, ''), blob: f, added: Date.now() };
+        decoded.delete(id);
+        const buf = await decodeSong(song);
+        if (buf.duration < 3) throw new Error('short');
+        const beat = Music.detectBeat(buf);
+        song.bpm = beat.bpm; song.offset = beat.offset;
+        song.hook = Music.findHook(buf, beat.bpm, beat.offset);
+        song.duration = buf.duration;
+        songs.unshift(song);
+        songDB.put(song);
+        last = song;
+      } catch (err) {
+        toast(`"${f.name}" 에서 소리를 읽을 수 없어요 (mp3, m4a, wav 권장)`, 3500);
+      }
     }
     setStatus('');
-  });
+    renderSongs();
+    if (last) selectSong(last.id, true);
+  }
+
+  async function selectSong(id, fresh) {
+    const song = songs.find((x) => x.id === id);
+    if (!song) return;
+    setStatus('🎵 노래 불러오는 중…');
+    try {
+      const buf = await decodeSong(song);
+      state.music = { kind: 'user', songId: id, name: song.name, buffer: buf, bpm: song.bpm, offset: song.offset, userStart: song.hook, start: 0, hook: song.hook };
+      snapStart();
+      applyRecommend(false);
+      toast(fresh ? `🎵 BPM ${song.bpm} · 🔥 ${fmt(song.hook)} 후렴부터 박자에 맞춰 컷해요` : `🎵 "${song.name}" 선택`, 3200);
+      renderSongs(); renderUserMusic(); renderAllGroups(); rebuild();
+    } catch (e) {
+      toast('노래를 불러오지 못했어요');
+    }
+    setStatus('');
+  }
+
+  function renderSongs() {
+    const box = $('#songList');
+    box.innerHTML = '';
+    songs.forEach((song) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      const sel = state.music.kind === 'user' && state.music.songId === song.id;
+      b.className = 'opt' + (sel ? ' sel' : '');
+      b.innerHTML = `<span class="on">🎵 <span class="nm"></span></span><span class="ds">${song.bpm} BPM · ${fmt(song.duration)}</span><span class="del" title="삭제">삭제</span>`;
+      b.querySelector('.nm').textContent = song.name;
+      b.addEventListener('click', (e) => {
+        if (e.target.classList.contains('del')) {
+          songs = songs.filter((x) => x.id !== song.id);
+          songDB.del(song.id);
+          decoded.delete(song.id);
+          if (sel) $('#umRemove').click(); else renderSongs();
+          return;
+        }
+        if (!sel) selectSong(song.id);
+      });
+      box.appendChild(b);
+    });
+  }
 
   function snapStart() {
     const m = state.music, period = 60 / m.bpm;
@@ -455,8 +538,11 @@
   $('#umRemove').addEventListener('click', () => {
     state.music = { kind: 'genre', genreId: RECOMMEND.music[state.mode][0] };
     applyRecommend(false);
-    renderUserMusic(); renderAllGroups(); rebuild();
+    renderSongs(); renderUserMusic(); renderAllGroups(); rebuild();
   });
+  const jumpTo = (t) => { state.music.userStart = t; snapStart(); renderUserMusic(); rebuild(); };
+  $('#umHook').addEventListener('click', () => jumpTo(state.music.hook || 0));
+  $('#umHead').addEventListener('click', () => jumpTo(0));
 
   // ───────── 세부 설정 ─────────
   const bindSel = (id, key, num) => $('#' + id).addEventListener('change', (e) => { state[key] = num ? Number(e.target.value) : e.target.value; rebuild(); });

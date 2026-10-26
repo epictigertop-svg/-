@@ -92,17 +92,23 @@
 
       <div class="step">
         <h2><b>2</b> 음악</h2>
-        <p class="hint">분위기에 맞는 음악을 골라 주세요. 음악을 바꾸면 어울리는 효과가 자동으로 추천돼요.</p>
-        <div class="opts" id="musicGroup"></div>
+        <label class="song-add" id="songDrop">
+          <input type="file" id="musicInput" accept="audio/*,video/*" multiple hidden>
+          <span class="sa-title">🎧 내 노래 넣기</span>
+          <small>폰·PC에 있는 노래 파일(mp3, m4a, wav)이나 노래가 들어간 영상 파일을 넣으세요.<br>박자를 분석해서 컷을 맞추고, <b>후렴(가장 신나는 부분)부터</b> 자동으로 시작해요. 한 번 넣은 노래는 이 브라우저에 저장돼요.</small>
+        </label>
+        <div class="opts songs" id="songList"></div>
         <div class="user-music" id="userMusicBox" hidden>
-          <div class="um-head"><span>🎵 <b id="umName"></b></span><button id="umRemove" class="ghost sm">✕ 해제</button></div>
+          <div class="um-head"><span>🎵 <b id="umName"></b></span><button id="umRemove" class="ghost sm">자동 생성 음악으로</button></div>
           <div class="field-row">
             <label class="field">BPM<input type="number" id="umBpm" min="50" max="220" step="0.1"></label>
-            <label class="field grow">음악 시작 위치 <span id="umStartLbl"></span><input type="range" id="umStart" min="0" step="0.1" value="0"></label>
+            <label class="field grow">노래 시작 위치 <span id="umStartLbl"></span><input type="range" id="umStart" min="0" step="0.1" value="0"></label>
           </div>
+          <div class="field-row"><button id="umHook" class="ghost sm">🔥 후렴부터 시작</button><button id="umHead" class="ghost sm">⏮ 처음부터 시작</button></div>
           <small class="hint">BPM은 자동 분석된 값이에요. 컷이 박자와 안 맞으면 직접 고쳐 주세요.</small>
         </div>
-        <label class="ghost upload-music"><input type="file" id="musicInput" accept="audio/*" hidden>🎵 내 음악 파일 사용하기</label>
+        <h3 class="sub-h">🎹 자동 생성 음악 <small>(노래 파일이 없을 때)</small></h3>
+        <div class="opts" id="musicGroup"></div>
       </div>
 
       <div class="step">

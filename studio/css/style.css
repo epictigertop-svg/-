@@ -135,7 +135,7 @@ kbd { font-size: 11px; background: rgba(255,255,255,.12); border-radius: 4px; pa
 .opt .ds { font-size: 12px; color: var(--muted); line-height: 1.35; }
 .opt.sel { border-color: var(--pink); background: linear-gradient(135deg, rgba(255,61,139,.16), rgba(139,92,255,.16)); }
 .opt.sel::after { content: '✓'; position: absolute; right: 10px; top: 9px; color: var(--pink); font-weight: 900; }
-.opt .rec { font-size: 10px; font-weight: 800; color: #111; background: var(--cyan); padding: 0 6px; border-radius: 99px; }
+.opt .rec { white-space: nowrap; font-size: 10px; font-weight: 800; color: #111; background: var(--cyan); padding: 0 6px; border-radius: 99px; }
 .more {
   grid-column: 1 / -1; background: none; border: 1px dashed #3a3a52; border-radius: 12px; padding: 8px; color: var(--muted); font-size: 13px;
 }
@@ -197,3 +197,22 @@ input[type=range] { accent-color: var(--pink); width: 100%; }
   .opts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .tag { display: none; }
 }
+
+/* 내 노래 */
+.song-add {
+  display: flex; flex-direction: column; gap: 4px; cursor: pointer; margin-bottom: 10px;
+  border-radius: var(--radius); padding: 16px; border: 1px solid transparent;
+  background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--grad) border-box;
+}
+.song-add:hover, .song-add.over { background: linear-gradient(#1e1a2c, #1e1a2c) padding-box, var(--grad) border-box; }
+.sa-title { font-size: 17px; font-weight: 800; }
+.song-add small { color: var(--muted); font-size: 12px; }
+.song-add small b { color: var(--text); }
+.songs:empty { display: none; }
+.songs { margin-bottom: 10px; }
+.opt .del { position: absolute; right: 6px; bottom: 6px; font-size: 11px; color: var(--muted); padding: 2px 5px; border-radius: 6px; }
+.opt .del:hover { color: var(--text); background: #33334a; }
+.sub-h { font-size: 14px; margin: 16px 0 8px; }
+.sub-h small { color: var(--muted); font-weight: 400; }
+.user-music { margin-bottom: 4px; }
+.user-music .field-row + .field-row { margin-top: 8px; }
